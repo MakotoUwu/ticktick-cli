@@ -335,7 +335,6 @@ src/ticktick_cli/
 - [ ] Publish to PyPI
 - [ ] Shell completions (bash, zsh, fish)
 - [ ] Token auto-refresh for V1 OAuth
-- [ ] MCP server mode (for Claude Desktop / AI IDE integration)
 - [ ] Homebrew formula
 - [ ] CI/CD with GitHub Actions
 
