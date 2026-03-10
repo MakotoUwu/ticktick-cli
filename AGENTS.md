@@ -1,64 +1,30 @@
-# AGENTS.md — Agent Guide for ticktick-cli
+# AGENTS.md — ticktick-cli
 
-This file describes how AI agents should use `ticktick-cli` to manage TickTick tasks, habits, and more.
+Agent-native CLI for TickTick. JSON output by default, no interactive prompts.
 
-## Overview
+## Commands
 
-`ticktick-cli` is an agent-native CLI for TickTick. All commands return structured JSON by default. No interactive prompts — use `--yes` to skip confirmations.
-
-## Authentication
-
-Before using any commands, ensure the user has authenticated:
+### Check auth (always run first)
 
 ```bash
 ticktick auth status
 ```
 
-If not authenticated, **ask the user** to run auth commands themselves (never handle passwords).
-
-## Output Contract
-
-```
-Success:  {"ok": true, "data": <result>, "count": <n>}
-Message:  {"ok": true, "message": "..."}
-Error:    {"ok": false, "error": "..."}
-```
-
-Exit codes: `0` = success, `1` = error, `2` = auth error.
-
-## Core Commands
+If not authenticated, **ask the user** to run auth commands themselves — never handle passwords.
 
 ### Tasks
 
 ```bash
-# List tasks (most recent first)
 ticktick task list [--limit N] [--priority high|medium|low|none] [--project PROJECT_ID] [--tag TAG]
-
-# Today's tasks
 ticktick task today
-
-# Overdue tasks
 ticktick task overdue
-
-# Search by keyword
 ticktick task search "QUERY"
-
-# Show single task details
 ticktick task show TASK_ID
-
-# Create a task
 ticktick task add "TITLE" [--priority high|medium|low] [--project PROJECT_ID] [--due DATE] [--tag TAG]
-
-# Complete a task
+ticktick task edit TASK_ID [--title "NEW"] [--priority LEVEL]
 ticktick task done TASK_ID
-
-# Delete (requires --yes for non-interactive)
 ticktick task delete TASK_ID --yes
-
-# Move task to another project
 ticktick task move TASK_ID --to PROJECT_ID
-
-# Completed tasks history
 ticktick task completed [--limit N]
 ```
 
@@ -95,49 +61,64 @@ ticktick focus heatmap [--days N]
 ticktick focus by-tag [--days N]
 ```
 
-### User
+### User & Sync
 
 ```bash
 ticktick user profile
 ticktick user stats
-ticktick user status
-```
-
-### Other
-
-```bash
+ticktick sync                          # Full account state dump
 ticktick folder list
 ticktick column list PROJECT_ID
-ticktick sync                          # Full account state dump
-ticktick config list                   # Current config
 ```
 
-## Common Agent Workflows
+## Output Contract
 
-### Daily briefing
-```bash
-ticktick task today
-ticktick task overdue
-ticktick habit list
+All commands return:
+
+```
+Success:  {"ok": true, "data": [...], "count": N}
+Message:  {"ok": true, "message": "Task created."}
+Error:    {"ok": false, "error": "description"}
 ```
 
-### Create and manage tasks
-```bash
-ticktick task add "Review PR #42" --priority high --due tomorrow
-# ... later ...
-ticktick task done TASK_ID
-```
+Exit codes: `0` success, `1` error, `2` auth error.
 
-### Parse JSON with jq
-```bash
-ticktick task list --priority high | jq -r '.data[].title'
-ticktick task overdue | jq '.count'
-```
+## Boundaries
 
-## Important Notes
+### Always safe
 
-- All destructive operations (delete, abandon) require `--yes` flag
-- `--human` flag is a **global option** — goes BEFORE the command: `ticktick --human task list`
+- Any read command (`list`, `show`, `search`, `today`, `overdue`, `status`, `sync`)
+- `ticktick config list` / `ticktick config path`
+
+### Ask user first
+
+- Creating tasks, projects, tags, habits (`add`, `create`)
+- Editing or moving tasks (`edit`, `move`)
+- Checking in habits (`checkin`)
+
+### Never do without explicit confirmation
+
+- Any delete operation — always use `--yes` flag
+- Auth commands — user must run these themselves
+- Batch operations (`batch-add`) with user data
+
+## Conventions
+
+- `--human` is a **global option** — goes BEFORE the command: `ticktick --human task list`
 - Task IDs are 24-character hex strings (MongoDB ObjectId format)
 - Dates in API responses are ISO 8601 with timezone offset
 - V2 commands (habits, focus, tags, folders, columns) require V2 authentication
+- Use `jq` for complex JSON parsing: `ticktick task list | jq '.data[].title'`
+
+## Tech Stack
+
+- Python 3.10+, Click framework, httpx, Rich
+- Config: `~/.config/ticktick-cli/<profile>/`
+- Dual API: V1 (OAuth2, official) + V2 (session, unofficial full-feature)
+
+## Build & Test
+
+```bash
+pip install -e ".[dev]"
+pytest -v               # 115 tests
+```

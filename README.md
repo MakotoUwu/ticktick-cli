@@ -17,7 +17,11 @@
 
 ---
 
-I was frustrated that no proper TickTick CLI existed. The official API covers only tasks and projects, third-party wrappers are incomplete, and none of them are designed for programmatic use by AI agents. So I built `ticktick-cli` -- a CLI that covers **100% of TickTick's API surface** (including the unofficial V2 endpoints), outputs **structured JSON by default**, and works equally well when invoked by a human or an LLM tool-calling agent.
+I was frustrated that no proper TickTick CLI existed. The official API covers only tasks and projects, third-party SDKs are incomplete, MCP servers add unnecessary context overhead, and none of these approaches are designed for the way modern AI agents actually work. So I built `ticktick-cli` -- a CLI that covers **100% of TickTick's API surface** (including the unofficial V2 endpoints), outputs **structured JSON by default**, and works equally well when invoked by a human or by Claude Code via Bash.
+
+### Why CLI, not MCP or SDK?
+
+The [emerging consensus](https://steipete.me/posts/2025/peekaboo-2-freeing-the-cli-from-its-mcp-shackles) from practitioners like [Peter Steinberger](https://github.com/steipete) and [Armin Ronacher](https://lucumr.pocoo.org/2025/7/3/tools/) is clear: **CLI-first, MCP only when necessary.** AI coding agents (Claude Code, Codex, Cursor) already invoke tools via shell -- that's their native interface. Adding an MCP server is an extra process, an extra protocol, and [extra context pollution](https://lucumr.pocoo.org/2025/12/13/skills-vs-mcp/) that doesn't add value when a CLI already outputs structured JSON. Benchmarks show CLI achieves higher task completion at equivalent token cost. The Unix philosophy was accidentally designed for AI agents decades before they existed.
 
 ---
 
@@ -187,7 +191,7 @@ Error:    {"ok": false, "error": "description"}
 
 ## Agent Integration
 
-`ticktick-cli` is designed to be invoked as a tool by AI agents (Claude, GPT, custom LLM agents). Here's why it works:
+`ticktick-cli` follows the [agent-native CLI](https://www.infoq.com/articles/ai-agent-cli/) design pattern -- the same approach used by `gh`, `git`, and `docker` with Claude Code, Codex, and Cursor. An [`AGENTS.md`](AGENTS.md) file is included for agent discovery (compatible with the [AGENTS.md standard](https://agents.md/) adopted by 60,000+ repositories).
 
 **No ANSI escape codes in JSON mode** -- output is always clean, parseable JSON.
 
@@ -218,6 +222,8 @@ export TICKTICK_PASSWORD="secret"
 export TICKTICK_CLIENT_ID="your_id"
 export TICKTICK_CLIENT_SECRET="your_secret"
 ```
+
+> **Why not MCP?** MCP servers add a separate process, a custom protocol, and [consume thousands of tokens](https://lucumr.pocoo.org/2025/12/13/skills-vs-mcp/) just from tool descriptions being loaded. A CLI that outputs JSON is already a perfect tool interface -- Claude Code calls it via Bash, parses the JSON, and moves on. Zero overhead, universal compatibility, and it works with *any* agent that has shell access.
 
 ## Authentication
 
