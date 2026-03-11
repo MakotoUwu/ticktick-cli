@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -15,6 +16,11 @@ from ticktick_cli.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Retry config: transient errors that are safe to retry
+_RETRYABLE_STATUS = {502, 503, 504}
+_MAX_RETRIES = 3
+_BACKOFF_BASE = 1.0  # seconds: 1s, 2s, 4s
 
 
 class BaseClient:
@@ -40,18 +46,43 @@ class BaseClient:
         params: dict[str, str] | None = None,
         json_data: Any = None,
     ) -> Any:
-        """Central request method with error handling."""
+        """Central request method with error handling and retry."""
         headers = self._get_auth_headers()
         logger.debug("%s %s%s", method, self._base_url, path)
 
-        response = self._http.request(
-            method,
-            path,
-            headers=headers,
-            params=params,
-            json=json_data,
-        )
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = self._http.request(
+                    method,
+                    path,
+                    headers=headers,
+                    params=params,
+                    json=json_data,
+                )
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
+                last_exc = exc
+                wait = _BACKOFF_BASE * (2 ** attempt)
+                logger.warning("Request failed (attempt %d/%d): %s — retrying in %.1fs",
+                               attempt + 1, _MAX_RETRIES, exc, wait)
+                time.sleep(wait)
+                continue
 
+            # Retry on transient server errors
+            if response.status_code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES - 1:
+                wait = _BACKOFF_BASE * (2 ** attempt)
+                logger.warning("HTTP %d (attempt %d/%d) — retrying in %.1fs",
+                               response.status_code, attempt + 1, _MAX_RETRIES, wait)
+                time.sleep(wait)
+                continue
+
+            return self._handle_response(response, path)
+
+        # All retries exhausted
+        raise APIError(f"Request failed after {_MAX_RETRIES} retries: {last_exc}") from last_exc
+
+    def _handle_response(self, response: httpx.Response, path: str) -> Any:
+        """Parse response, raising typed exceptions for error codes."""
         if response.status_code == 401:
             raise AuthenticationError(
                 "Authentication failed (401). Run `ticktick auth login` first."
@@ -61,7 +92,6 @@ class BaseClient:
         if response.status_code == 404:
             raise NotFoundError(f"Resource not found: {path}", status_code=404)
         if response.status_code >= 400:
-            # Truncate response body to avoid leaking sensitive data in error messages
             body = response.text[:200] if response.text else ""
             raise APIError(
                 f"API error {response.status_code}: {body}",

@@ -346,7 +346,7 @@ class TestOAuth2Login:
         assert auth["v1"]["refresh_token"] == "ref_tok"
         assert auth["v1"]["expires_in"] == 86400
         assert "obtained_at" in auth["v1"]  # token expiry tracking
-        assert "client_secret" not in auth["v1"]  # secret not stored on disk
+        assert auth["v1"]["client_secret"] == "test_csec"  # stored for token refresh
 
         # Browser was opened with correct URL
         assert "client_id=test_cid" in captured_url["url"]
@@ -401,3 +401,133 @@ class TestTickTickClient:
         client = TickTickClient(v1_access_token="tok", v2_cookies={"t": "s"})
         assert client.has_v1 is True
         assert client.has_v2 is True
+
+
+# ── Token refresh ────────────────────────────────────────────
+
+
+class TestTokenRefresh:
+    def test_token_not_expired(self, temp_auth_env: Path) -> None:
+        """Valid token should be used as-is."""
+        import time
+
+        save_auth({
+            "v1": {
+                "access_token": "valid_tok",
+                "client_id": "cid",
+                "client_secret": "csec",
+                "obtained_at": int(time.time()),
+                "expires_in": 86400,
+            }
+        })
+        from ticktick_cli.auth import _is_v1_token_expired
+
+        auth = load_auth()
+        assert _is_v1_token_expired(auth["v1"]) is False
+
+    def test_token_expired(self, temp_auth_env: Path) -> None:
+        """Expired token should be detected."""
+        save_auth({
+            "v1": {
+                "access_token": "old_tok",
+                "client_id": "cid",
+                "client_secret": "csec",
+                "obtained_at": 1000000,
+                "expires_in": 3600,
+            }
+        })
+        from ticktick_cli.auth import _is_v1_token_expired
+
+        auth = load_auth()
+        assert _is_v1_token_expired(auth["v1"]) is True
+
+    def test_token_missing_expiry_assumed_valid(self) -> None:
+        """Token without expiry info is assumed valid."""
+        from ticktick_cli.auth import _is_v1_token_expired
+
+        assert _is_v1_token_expired({"access_token": "tok"}) is False
+
+    def test_refresh_success(self, temp_auth_env: Path) -> None:
+        """Successful refresh should update stored token."""
+        save_auth({
+            "v1": {
+                "access_token": "old_tok",
+                "client_id": "cid",
+                "client_secret": "csec",
+                "refresh_token": "ref_tok",
+                "obtained_at": 1000000,
+                "expires_in": 3600,
+            }
+        })
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "access_token": "new_tok",
+            "refresh_token": "new_ref",
+            "expires_in": 86400,
+        }
+        with patch("ticktick_cli.auth.httpx.post", return_value=mock_response):
+            from ticktick_cli.auth import _refresh_v1_token
+
+            result = _refresh_v1_token(load_auth()["v1"], "default")
+            assert result == "new_tok"
+
+        # Verify saved
+        auth = load_auth()
+        assert auth["v1"]["access_token"] == "new_tok"
+        assert auth["v1"]["refresh_token"] == "new_ref"
+
+    def test_refresh_failure_returns_none(self, temp_auth_env: Path) -> None:
+        """Failed refresh should return None (fallback to existing token)."""
+        save_auth({
+            "v1": {
+                "access_token": "old_tok",
+                "client_id": "cid",
+                "client_secret": "csec",
+                "refresh_token": "ref_tok",
+                "obtained_at": 1000000,
+                "expires_in": 3600,
+            }
+        })
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.text = "invalid_grant"
+        with patch("ticktick_cli.auth.httpx.post", return_value=mock_response):
+            from ticktick_cli.auth import _refresh_v1_token
+
+            result = _refresh_v1_token(load_auth()["v1"], "default")
+            assert result is None
+
+    def test_refresh_no_refresh_token_returns_none(self) -> None:
+        """No refresh_token means refresh is impossible."""
+        from ticktick_cli.auth import _refresh_v1_token
+
+        result = _refresh_v1_token({"access_token": "tok", "client_id": "cid"}, "default")
+        assert result is None
+
+    def test_get_client_refreshes_expired_token(self, temp_auth_env: Path) -> None:
+        """get_client should auto-refresh expired V1 token."""
+        save_auth({
+            "v1": {
+                "access_token": "expired_tok",
+                "client_id": "cid",
+                "client_secret": "csec",
+                "refresh_token": "ref_tok",
+                "obtained_at": 1000000,
+                "expires_in": 3600,
+            }
+        })
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "access_token": "fresh_tok",
+            "expires_in": 86400,
+        }
+        with patch("ticktick_cli.auth.httpx.post", return_value=mock_response):
+            from ticktick_cli.auth import get_client
+
+            client = get_client()
+            assert client.has_v1 is True
+            # Verify the refreshed token was saved
+            auth = load_auth()
+            assert auth["v1"]["access_token"] == "fresh_tok"
