@@ -7,7 +7,7 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_message, output_error
+from ticktick_cli.output import output_error, output_list, output_message
 
 
 def _format_tag(t: dict[str, Any]) -> dict[str, Any]:
@@ -36,7 +36,7 @@ def tag_list(ctx: click.Context) -> None:
         output_list(formatted, columns=["name", "label", "color", "parent"], title="Tags", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @tag_group.command("create")
@@ -57,7 +57,7 @@ def tag_create(ctx: click.Context, label: str, color: str | None, parent: str | 
         output_message(f"Tag '{label}' created.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @tag_group.command("edit")
@@ -83,7 +83,7 @@ def tag_edit(ctx: click.Context, name: str, label: str | None, color: str | None
         output_message(f"Tag '{name}' updated.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @tag_group.command("rename")
@@ -98,7 +98,7 @@ def tag_rename(ctx: click.Context, old_name: str, new_name: str) -> None:
         output_message(f"Tag '{old_name}' renamed to '{new_name}'.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @tag_group.command("merge")
@@ -113,7 +113,7 @@ def tag_merge(ctx: click.Context, source: str, target: str) -> None:
         output_message(f"Tag '{source}' merged into '{target}'.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @tag_group.command("delete")
@@ -130,4 +130,4 @@ def tag_delete(ctx: click.Context, name: str, yes: bool) -> None:
         output_message(f"Tag '{name}' deleted.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

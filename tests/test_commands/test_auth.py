@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
 from ticktick_cli.cli import cli
-from ticktick_cli.config import save_auth, load_auth
+from ticktick_cli.config import load_auth, save_auth
 from ticktick_cli.exceptions import AuthenticationError
 
 
@@ -96,7 +96,7 @@ class TestAuthLogout:
 
     def test_logout_without_yes_aborts(self, runner: CliRunner, temp_auth_env: Path) -> None:
         save_auth({"v1": {"access_token": "keep_me"}})
-        result = runner.invoke(cli, ["auth", "logout"], input="n\n")
+        runner.invoke(cli, ["auth", "logout"], input="n\n")
         # Should abort — credentials remain
         assert load_auth().get("v1", {}).get("access_token") == "keep_me"
 
@@ -295,8 +295,6 @@ class TestExchangeCode:
 class TestOAuth2Login:
     def test_oauth2_login_full_flow(self, temp_auth_env: Path) -> None:
         """Test the full OAuth2 flow with mocked browser + server + token exchange."""
-        import threading
-        import urllib.request
         from ticktick_cli.auth import oauth2_login
 
         token_response = {

@@ -7,18 +7,20 @@ V2: Username/password session login
 from __future__ import annotations
 
 import http.server
-import json
 import secrets
 import threading
 import time
 import urllib.parse
 import webbrowser
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from ticktick_cli.config import load_auth, save_auth
 from ticktick_cli.exceptions import AuthenticationError
+
+if TYPE_CHECKING:
+    from ticktick_cli.api.client import TickTickClient
 
 OAUTH_AUTHORIZE_URL = "https://ticktick.com/oauth/authorize"
 OAUTH_TOKEN_URL = "https://ticktick.com/oauth/token"
@@ -177,7 +179,7 @@ def v2_login(
     return result
 
 
-def get_client(profile: str = "default") -> "TickTickClient":
+def get_client(profile: str = "default") -> TickTickClient:
     """Create a TickTickClient from stored credentials."""
     from ticktick_cli.api.client import TickTickClient
 

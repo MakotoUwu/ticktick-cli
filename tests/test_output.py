@@ -8,11 +8,11 @@ import click
 import pytest
 
 from ticktick_cli.output import (
-    output_success,
     output_error,
-    output_list,
     output_item,
+    output_list,
     output_message,
+    output_success,
 )
 
 

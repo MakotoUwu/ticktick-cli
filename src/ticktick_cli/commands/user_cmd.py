@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_item, output_error
+from ticktick_cli.output import output_error, output_item
 
 
 @click.group("user")
@@ -31,7 +31,7 @@ def user_profile(ctx: click.Context) -> None:
         output_item(formatted, ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @user_group.command("status")
@@ -50,7 +50,7 @@ def user_status(ctx: click.Context) -> None:
         output_item(formatted, ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @user_group.command("stats")
@@ -63,7 +63,7 @@ def user_stats(ctx: click.Context) -> None:
         output_item(stats, ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @user_group.command("preferences")
@@ -76,4 +76,4 @@ def user_preferences(ctx: click.Context) -> None:
         output_item(prefs, ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

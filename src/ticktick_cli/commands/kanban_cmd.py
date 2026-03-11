@@ -7,7 +7,7 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_message, output_error
+from ticktick_cli.output import output_error, output_list, output_message
 
 
 @click.group("column")
@@ -30,7 +30,7 @@ def column_list(ctx: click.Context, project_id: str) -> None:
         output_list(formatted, columns=["id", "name", "sortOrder"], title="Kanban Columns", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @column_group.command("create")
@@ -49,7 +49,7 @@ def column_create(ctx: click.Context, project_id: str, name: str, sort_order: in
         output_message(f"Column '{name}' created.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @column_group.command("edit")
@@ -73,7 +73,7 @@ def column_edit(
         output_message(f"Column {column_id} updated.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @column_group.command("delete")
@@ -91,4 +91,4 @@ def column_delete(ctx: click.Context, column_id: str, project: str, yes: bool) -
         output_message(f"Column {column_id} deleted.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

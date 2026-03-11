@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_item, output_error
+from ticktick_cli.output import output_error, output_item, output_list
 
 
 def _resolve_date_range(
@@ -58,7 +58,7 @@ def focus_heatmap(ctx: click.Context, from_date: str | None, to_date: str | None
             output_item({"raw": data}, ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @focus_group.command("by-tag")
@@ -99,4 +99,4 @@ def focus_by_tag(ctx: click.Context, from_date: str | None, to_date: str | None,
             output_item(data, ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

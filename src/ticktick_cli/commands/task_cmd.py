@@ -8,7 +8,7 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_item, output_message, output_error
+from ticktick_cli.output import output_error, output_item, output_list, output_message
 
 PRIORITY_MAP = {"none": 0, "low": 1, "medium": 3, "high": 5}
 PRIORITY_REVERSE = {0: "none", 1: "low", 3: "medium", 5: "high"}
@@ -100,7 +100,7 @@ def task_add(
             output_item(_format_task(result), ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("list")
@@ -171,7 +171,7 @@ def task_list(
         output_list(formatted, columns=columns, title="Tasks", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("show")
@@ -189,7 +189,7 @@ def task_show(ctx: click.Context, task_id: str) -> None:
         output_item(_format_task(task), ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("edit")
@@ -240,7 +240,7 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
         output_message(f"Task {task_id} updated.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("done")
@@ -263,7 +263,7 @@ def task_done(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
         output_message(f"Completed {len(task_ids)} task(s).", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("abandon")
@@ -281,7 +281,7 @@ def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
         output_message(f"Abandoned {len(task_ids)} task(s).", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("delete")
@@ -307,7 +307,7 @@ def task_delete(ctx: click.Context, task_ids: tuple[str, ...], yes: bool) -> Non
         output_message(f"Deleted {len(task_ids)} task(s).", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("move")
@@ -328,7 +328,7 @@ def task_move(ctx: click.Context, task_id: str, project: str) -> None:
         output_message(f"Task {task_id} moved to {project}.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("search")
@@ -350,7 +350,7 @@ def task_search(ctx: click.Context, query: str, limit: int) -> None:
         output_list(formatted, columns=["id", "title", "priority", "dueDate", "projectId"], ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("today")
@@ -384,7 +384,7 @@ def task_completed(ctx: click.Context, from_date: str | None, to_date: str | Non
         output_list(formatted, columns=["id", "title", "priority", "dueDate"], title="Completed Tasks", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("trash")
@@ -400,7 +400,7 @@ def task_trash(ctx: click.Context, limit: int) -> None:
         output_list(formatted, columns=["id", "title", "priority"], title="Trash", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("pin")
@@ -420,7 +420,7 @@ def task_pin(ctx: click.Context, task_id: str) -> None:
         output_message(f"Task {task_id} pinned.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("unpin")
@@ -439,7 +439,7 @@ def task_unpin(ctx: click.Context, task_id: str) -> None:
         output_message(f"Task {task_id} unpinned.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @task_group.command("batch-add")
@@ -459,7 +459,7 @@ def task_batch_add(ctx: click.Context, filepath: str) -> None:
         output_message(f"Created {len(tasks)} task(s) from {filepath}.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 # ── Helpers ───────────────────────────────────────────────────

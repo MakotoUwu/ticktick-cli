@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_message, output_error
+from ticktick_cli.output import output_error, output_list, output_message
 
 
 @click.group("subtask")
@@ -26,7 +26,7 @@ def subtask_set(ctx: click.Context, task_id: str, parent: str) -> None:
         output_message(f"Task {task_id} is now a subtask of {parent}.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @subtask_group.command("unset")
@@ -42,7 +42,7 @@ def subtask_unset(ctx: click.Context, task_id: str, parent: str) -> None:
         output_message(f"Task {task_id} removed from parent {parent}.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @subtask_group.command("list")
@@ -67,4 +67,4 @@ def subtask_list(ctx: click.Context, parent_task_id: str) -> None:
         output_list(formatted, columns=["id", "title", "status", "priority"], title="Subtasks", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

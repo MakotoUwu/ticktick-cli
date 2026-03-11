@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import os
-import stat
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,9 +19,6 @@ DEFAULT_CONFIG = {
     "v1_client_secret": None,
     "v1_redirect_uri": "http://localhost:8080/callback",
 }
-
-
-import re
 
 _PROFILE_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 

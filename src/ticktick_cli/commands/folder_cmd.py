@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_message, output_error
+from ticktick_cli.output import output_error, output_list, output_message
 
 
 @click.group("folder")
@@ -24,7 +24,7 @@ def folder_list(ctx: click.Context) -> None:
         output_list(formatted, columns=["id", "name"], title="Folders", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @folder_group.command("create")
@@ -38,7 +38,7 @@ def folder_create(ctx: click.Context, name: str) -> None:
         output_message(f"Folder '{name}' created.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @folder_group.command("rename")
@@ -55,7 +55,7 @@ def folder_rename(ctx: click.Context, folder_id: str, new_name: str) -> None:
         output_message(f"Folder {folder_id} renamed to '{new_name}'.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @folder_group.command("delete")
@@ -72,4 +72,4 @@ def folder_delete(ctx: click.Context, folder_id: str, yes: bool) -> None:
         output_message(f"Folder {folder_id} deleted.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

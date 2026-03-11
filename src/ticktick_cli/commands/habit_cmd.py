@@ -9,7 +9,7 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_item, output_message, output_error
+from ticktick_cli.output import output_error, output_item, output_list, output_message
 
 
 def _format_habit(h: dict[str, Any]) -> dict[str, Any]:
@@ -52,7 +52,7 @@ def habit_list(ctx: click.Context, include_archived: bool) -> None:
         )
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("show")
@@ -66,13 +66,13 @@ def habit_show(ctx: click.Context, habit_id: str) -> None:
         habit = next((h for h in habits if h.get("id") == habit_id), None)
         if not habit:
             output_error(f"Habit {habit_id} not found.", ctx)
-            raise SystemExit(1)
+            raise SystemExit(1) from None
         output_item(_format_habit(habit), ctx)
     except SystemExit:
         raise
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("create")
@@ -138,7 +138,7 @@ def habit_create(
         output_message(f"Habit '{name}' created (ID: {habit_id}).", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("edit")
@@ -162,7 +162,7 @@ def habit_edit(ctx: click.Context, habit_id: str, **kwargs: Any) -> None:
         output_message(f"Habit {habit_id} updated.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("delete")
@@ -179,7 +179,7 @@ def habit_delete(ctx: click.Context, habit_id: str, yes: bool) -> None:
         output_message(f"Habit {habit_id} deleted.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("checkin")
@@ -210,7 +210,7 @@ def habit_checkin(ctx: click.Context, habit_id: str, checkin_date: str | None, v
         output_message(f"Checked in habit {habit_id} for {stamp}.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("history")
@@ -243,7 +243,7 @@ def habit_history(ctx: click.Context, habit_id: str, from_date: str | None, days
         output_list(formatted, columns=["date", "value", "status"], title=f"Habit History ({habit_id})", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("archive")
@@ -258,7 +258,7 @@ def habit_archive(ctx: click.Context, habit_id: str) -> None:
         output_message(f"Habit {habit_id} archived.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @habit_group.command("unarchive")
@@ -273,4 +273,4 @@ def habit_unarchive(ctx: click.Context, habit_id: str) -> None:
         output_message(f"Habit {habit_id} unarchived.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

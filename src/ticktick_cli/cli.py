@@ -9,20 +9,20 @@ import click
 
 from ticktick_cli import __version__
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_item, output_error
 
 # Import all command groups
 from ticktick_cli.commands.auth_cmd import auth_group
-from ticktick_cli.commands.task_cmd import task_group
-from ticktick_cli.commands.project_cmd import project_group
-from ticktick_cli.commands.folder_cmd import folder_group
-from ticktick_cli.commands.tag_cmd import tag_group
-from ticktick_cli.commands.kanban_cmd import column_group
-from ticktick_cli.commands.subtask_cmd import subtask_group
-from ticktick_cli.commands.habit_cmd import habit_group
-from ticktick_cli.commands.focus_cmd import focus_group
-from ticktick_cli.commands.user_cmd import user_group
 from ticktick_cli.commands.config_cmd import config_group
+from ticktick_cli.commands.focus_cmd import focus_group
+from ticktick_cli.commands.folder_cmd import folder_group
+from ticktick_cli.commands.habit_cmd import habit_group
+from ticktick_cli.commands.kanban_cmd import column_group
+from ticktick_cli.commands.project_cmd import project_group
+from ticktick_cli.commands.subtask_cmd import subtask_group
+from ticktick_cli.commands.tag_cmd import tag_group
+from ticktick_cli.commands.task_cmd import task_group
+from ticktick_cli.commands.user_cmd import user_group
+from ticktick_cli.output import output_error, output_item
 
 
 @click.group()
@@ -80,7 +80,7 @@ def sync_command(ctx: click.Context) -> None:
             output_item(summary, ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @cli.command("version")

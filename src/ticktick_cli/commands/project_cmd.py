@@ -7,7 +7,7 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_list, output_item, output_message, output_error
+from ticktick_cli.output import output_error, output_item, output_list, output_message
 
 
 def _format_project(p: dict[str, Any]) -> dict[str, Any]:
@@ -41,7 +41,7 @@ def project_list(ctx: click.Context, include_archived: bool) -> None:
         output_list(formatted, columns=["id", "name", "color", "kind", "viewMode"], title="Projects", ctx=ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @project_group.command("create")
@@ -63,13 +63,13 @@ def project_create(
         data["groupId"] = folder
     try:
         if client.has_v2:
-            result = client.v2.batch_projects(add=[data])
+            client.v2.batch_projects(add=[data])
         else:
-            result = client.v1.create_project(data)
+            client.v1.create_project(data)
         output_message(f"Project '{name}' created.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @project_group.command("show")
@@ -94,10 +94,10 @@ def project_show(ctx: click.Context, identifier: str) -> None:
                 output_item(_format_project(proj), ctx)
             else:
                 output_error(f"Project {identifier} not found.", ctx)
-                raise SystemExit(1)
+                raise SystemExit(1) from None
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @project_group.command("edit")
@@ -130,7 +130,7 @@ def project_edit(ctx: click.Context, identifier: str, name: str | None, color: s
         output_message(f"Project {identifier} updated.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @project_group.command("delete")
@@ -151,7 +151,7 @@ def project_delete(ctx: click.Context, identifier: str, yes: bool) -> None:
         output_message(f"Project '{identifier}' deleted.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 def _resolve_project(client: Any, name_or_id: str) -> str:

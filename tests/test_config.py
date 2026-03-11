@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
 import pytest
 
 from ticktick_cli.config import (
-    get_config_dir,
-    load_config,
-    save_config,
-    load_auth,
-    save_auth,
     clear_auth,
+    get_config_dir,
+    load_auth,
+    load_config,
+    save_auth,
+    save_config,
 )
 
 

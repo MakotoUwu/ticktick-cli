@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import click
 
-from ticktick_cli.config import load_auth, clear_auth
-from ticktick_cli.output import output_success, output_message, output_error
+from ticktick_cli.config import clear_auth, load_auth
+from ticktick_cli.output import output_error, output_message, output_success
 
 
 @click.group("auth")
@@ -34,11 +34,11 @@ def auth_login(ctx: click.Context, client_id: str, client_secret: str, redirect_
 
     profile = ctx.obj.get("profile", "default")
     try:
-        result = oauth2_login(client_id, client_secret, redirect_uri, profile=profile)
+        oauth2_login(client_id, client_secret, redirect_uri, profile=profile)
         output_message("V1 OAuth login successful.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(2)
+        raise SystemExit(2) from None
 
 
 @auth_group.command("login-v2")
@@ -62,11 +62,11 @@ def auth_login_v2(ctx: click.Context, username: str, password: str) -> None:
 
     profile = ctx.obj.get("profile", "default")
     try:
-        result = v2_login(username, password, profile=profile)
+        v2_login(username, password, profile=profile)
         output_message("V2 session login successful.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(2)
+        raise SystemExit(2) from None
 
 
 @auth_group.command("logout")
