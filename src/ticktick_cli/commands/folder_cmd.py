@@ -5,7 +5,13 @@ from __future__ import annotations
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_error, output_list, output_message
+from ticktick_cli.output import (
+    is_dry_run,
+    output_dry_run,
+    output_error,
+    output_list,
+    output_message,
+)
 
 
 @click.group("folder")
@@ -32,6 +38,10 @@ def folder_list(ctx: click.Context) -> None:
 @click.pass_context
 def folder_create(ctx: click.Context, name: str) -> None:
     """Create a project folder."""
+    if is_dry_run(ctx):
+        output_dry_run("folder.create", {"name": name}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         client.v2.batch_project_groups(add=[{"name": name, "listType": "group"}])
@@ -64,6 +74,10 @@ def folder_rename(ctx: click.Context, folder_id: str, new_name: str) -> None:
 @click.pass_context
 def folder_delete(ctx: click.Context, folder_id: str, yes: bool) -> None:
     """Delete a project folder."""
+    if is_dry_run(ctx):
+        output_dry_run("folder.delete", {"folder_id": folder_id}, ctx)
+        return
+
     if not yes:
         click.confirm(f"Delete folder {folder_id}?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))

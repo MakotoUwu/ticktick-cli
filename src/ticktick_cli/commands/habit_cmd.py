@@ -9,7 +9,14 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_error, output_item, output_list, output_message
+from ticktick_cli.output import (
+    is_dry_run,
+    output_dry_run,
+    output_error,
+    output_item,
+    output_list,
+    output_message,
+)
 
 
 def _format_habit(h: dict[str, Any]) -> dict[str, Any]:
@@ -133,6 +140,10 @@ def habit_create(
     if reminder:
         habit_data["reminders"] = [reminder]
 
+    if is_dry_run(ctx):
+        output_dry_run("habit.create", habit_data, ctx)
+        return
+
     try:
         client.v2.batch_habits(add=[habit_data])
         output_message(f"Habit '{name}' created (ID: {habit_id}).", ctx)
@@ -171,6 +182,10 @@ def habit_edit(ctx: click.Context, habit_id: str, **kwargs: Any) -> None:
 @click.pass_context
 def habit_delete(ctx: click.Context, habit_id: str, yes: bool) -> None:
     """Delete a habit."""
+    if is_dry_run(ctx):
+        output_dry_run("habit.delete", {"habit_id": habit_id}, ctx)
+        return
+
     if not yes:
         click.confirm(f"Delete habit {habit_id}?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))

@@ -29,9 +29,11 @@ from ticktick_cli.output import output_error, output_item
 @click.option("--human", is_flag=True, help="Human-readable rich table output instead of JSON.")
 @click.option("--verbose", is_flag=True, help="Enable verbose/debug output.")
 @click.option("--profile", default="default", help="Auth profile to use.")
+@click.option("--fields", default=None, help="Comma-separated list of fields to include in output (e.g., id,title,priority).")
+@click.option("--dry-run", is_flag=True, help="Show what would be done without executing.")
 @click.version_option(version=__version__, prog_name="ticktick-cli")
 @click.pass_context
-def cli(ctx: click.Context, human: bool, verbose: bool, profile: str) -> None:
+def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: str | None, dry_run: bool) -> None:
     """TickTick CLI — agent-native command-line interface for TickTick.
 
     JSON output by default. Use --human for rich tables.
@@ -40,6 +42,8 @@ def cli(ctx: click.Context, human: bool, verbose: bool, profile: str) -> None:
     ctx.obj["human"] = human
     ctx.obj["verbose"] = verbose
     ctx.obj["profile"] = profile
+    ctx.obj["fields"] = [f.strip() for f in fields.split(",")] if fields else None
+    ctx.obj["dry_run"] = dry_run
 
 
 # ── Register all command groups ──────────────────────────
@@ -81,6 +85,33 @@ def sync_command(ctx: click.Context) -> None:
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
+
+
+@cli.command("completion")
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]))
+@click.pass_context
+def completion_command(ctx: click.Context, shell: str) -> None:
+    """Generate shell completion script.
+
+    Usage:
+
+      ticktick completion bash >> ~/.bashrc
+
+      ticktick completion zsh >> ~/.zshrc
+
+      ticktick completion fish > ~/.config/fish/completions/ticktick.fish
+    """
+    import os
+
+    env_var = "_TICKTICK_COMPLETE"
+    shell_map = {"bash": "bash_source", "zsh": "zsh_source", "fish": "fish_source"}
+    os.environ[env_var] = shell_map[shell]
+    try:
+        cli(standalone_mode=False)
+    except SystemExit:
+        pass
+    finally:
+        os.environ.pop(env_var, None)
 
 
 @cli.command("version")

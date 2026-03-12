@@ -8,7 +8,14 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_error, output_item, output_list, output_message
+from ticktick_cli.output import (
+    is_dry_run,
+    output_dry_run,
+    output_error,
+    output_item,
+    output_list,
+    output_message,
+)
 
 PRIORITY_MAP = {"none": 0, "low": 1, "medium": 3, "high": 5}
 PRIORITY_REVERSE = {0: "none", 1: "low", 3: "medium", 5: "high"}
@@ -90,6 +97,10 @@ def task_add(
         task_data["repeatFlag"] = repeat
     if reminder:
         task_data["reminders"] = list(reminder)
+
+    if is_dry_run(ctx):
+        output_dry_run("task.add", task_data, ctx)
+        return
 
     try:
         if client.has_v2:
@@ -228,6 +239,10 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
     if kwargs.get("column"):
         update["columnId"] = kwargs["column"]
 
+    if is_dry_run(ctx):
+        output_dry_run("task.edit", update, ctx)
+        return
+
     try:
         if client.has_v2:
             # Need projectId for V2 update
@@ -248,6 +263,10 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
 @click.pass_context
 def task_done(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
     """Mark task(s) as completed."""
+    if is_dry_run(ctx):
+        output_dry_run("task.done", {"task_ids": list(task_ids)}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         if client.has_v1:
@@ -290,6 +309,10 @@ def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
 @click.pass_context
 def task_delete(ctx: click.Context, task_ids: tuple[str, ...], yes: bool) -> None:
     """Delete task(s)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.delete", {"task_ids": list(task_ids)}, ctx)
+        return
+
     if not yes:
         click.confirm(f"Delete {len(task_ids)} task(s)?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))

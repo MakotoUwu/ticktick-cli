@@ -7,7 +7,13 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_error, output_list, output_message
+from ticktick_cli.output import (
+    is_dry_run,
+    output_dry_run,
+    output_error,
+    output_list,
+    output_message,
+)
 
 
 def _format_tag(t: dict[str, Any]) -> dict[str, Any]:
@@ -52,6 +58,10 @@ def tag_create(ctx: click.Context, label: str, color: str | None, parent: str | 
         tag["color"] = color
     if parent:
         tag["parent"] = parent
+    if is_dry_run(ctx):
+        output_dry_run("tag.create", tag, ctx)
+        return
+
     try:
         client.v2.batch_tags(add=[tag])
         output_message(f"Tag '{label}' created.", ctx)
@@ -122,6 +132,10 @@ def tag_merge(ctx: click.Context, source: str, target: str) -> None:
 @click.pass_context
 def tag_delete(ctx: click.Context, name: str, yes: bool) -> None:
     """Delete a tag."""
+    if is_dry_run(ctx):
+        output_dry_run("tag.delete", {"name": name}, ctx)
+        return
+
     if not yes:
         click.confirm(f"Delete tag '{name}'?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))

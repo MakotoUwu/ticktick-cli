@@ -8,6 +8,8 @@ import click
 import pytest
 
 from ticktick_cli.output import (
+    is_dry_run,
+    output_dry_run,
     output_error,
     output_item,
     output_list,
@@ -16,10 +18,10 @@ from ticktick_cli.output import (
 )
 
 
-def _make_ctx(human: bool = False) -> click.Context:
+def _make_ctx(human: bool = False, fields: list[str] | None = None, dry_run: bool = False) -> click.Context:
     """Create a click Context with obj dict."""
     ctx = click.Context(click.Command("test"))
-    ctx.obj = {"human": human}
+    ctx.obj = {"human": human, "fields": fields, "dry_run": dry_run}
     return ctx
 
 
@@ -103,3 +105,66 @@ class TestHumanOutput:
         output_list([], ctx=ctx)
         captured = capsys.readouterr()
         assert "No results" in captured.out
+
+
+class TestFieldsFilter:
+    def test_fields_filter_item(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(fields=["id", "title"])
+        output_item({"id": "1", "title": "Test", "priority": "high", "tags": []}, ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert set(data["data"].keys()) == {"id", "title"}
+
+    def test_fields_filter_list(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(fields=["id", "name"])
+        items = [{"id": "1", "name": "First", "color": "red"}, {"id": "2", "name": "Second", "color": "blue"}]
+        output_list(items, columns=["id", "name", "color"], ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        for item in data["data"]:
+            assert set(item.keys()) == {"id", "name"}
+
+    def test_fields_filter_success(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(fields=["id"])
+        output_success({"id": "1", "title": "Test", "extra": "data"}, ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert set(data["data"].keys()) == {"id"}
+
+    def test_no_fields_passes_everything(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(fields=None)
+        output_item({"id": "1", "title": "Test", "priority": "high"}, ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert set(data["data"].keys()) == {"id", "title", "priority"}
+
+
+class TestDryRun:
+    def test_is_dry_run_true(self) -> None:
+        ctx = _make_ctx(dry_run=True)
+        assert is_dry_run(ctx) is True
+
+    def test_is_dry_run_false(self) -> None:
+        ctx = _make_ctx(dry_run=False)
+        assert is_dry_run(ctx) is False
+
+    def test_is_dry_run_none_ctx(self) -> None:
+        assert is_dry_run(None) is False
+
+    def test_output_dry_run_json(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx()
+        output_dry_run("task.add", {"title": "Test", "priority": 0}, ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["ok"] is True
+        assert data["dry_run"] is True
+        assert data["action"] == "task.add"
+        assert data["details"]["title"] == "Test"
+
+    def test_output_dry_run_no_details(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx()
+        output_dry_run("task.delete", ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["dry_run"] is True
+        assert "details" not in data

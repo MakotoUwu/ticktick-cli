@@ -7,7 +7,14 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_error, output_item, output_list, output_message
+from ticktick_cli.output import (
+    is_dry_run,
+    output_dry_run,
+    output_error,
+    output_item,
+    output_list,
+    output_message,
+)
 
 
 def _format_project(p: dict[str, Any]) -> dict[str, Any]:
@@ -61,6 +68,10 @@ def project_create(
         data["color"] = color
     if folder:
         data["groupId"] = folder
+    if is_dry_run(ctx):
+        output_dry_run("project.create", data, ctx)
+        return
+
     try:
         if client.has_v2:
             client.v2.batch_projects(add=[data])
@@ -139,6 +150,10 @@ def project_edit(ctx: click.Context, identifier: str, name: str | None, color: s
 @click.pass_context
 def project_delete(ctx: click.Context, identifier: str, yes: bool) -> None:
     """Delete a project and all its tasks."""
+    if is_dry_run(ctx):
+        output_dry_run("project.delete", {"identifier": identifier}, ctx)
+        return
+
     if not yes:
         click.confirm(f"Delete project '{identifier}' and all its tasks?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))

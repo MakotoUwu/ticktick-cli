@@ -25,9 +25,28 @@ def _serialize(obj: Any) -> Any:
     return str(obj)
 
 
+def _apply_fields_filter(data: Any, fields: list[str] | None) -> Any:
+    """Filter dict/list-of-dicts to only include specified fields."""
+    if not fields:
+        return data
+    if isinstance(data, dict):
+        return {k: v for k, v in data.items() if k in fields}
+    if isinstance(data, list):
+        return [{k: v for k, v in item.items() if k in fields} for item in data if isinstance(item, dict)]
+    return data
+
+
+def _get_fields(ctx: click.Context | None) -> list[str] | None:
+    """Extract --fields list from context."""
+    if ctx and ctx.obj:
+        return ctx.obj.get("fields")
+    return None
+
+
 def output_success(data: Any, ctx: click.Context | None = None) -> None:
     """Output successful result."""
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
+    data = _apply_fields_filter(data, _get_fields(ctx))
 
     if human:
         _print_human(data)
@@ -58,6 +77,10 @@ def output_list(
 ) -> None:
     """Output a list of items as JSON array or rich table."""
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
+    fields = _get_fields(ctx)
+    if fields:
+        items = _apply_fields_filter(items, fields)
+        columns = fields  # Override table columns to match
 
     if human:
         _print_table(items, columns=columns, title=title)
@@ -72,6 +95,7 @@ def output_item(
 ) -> None:
     """Output a single item."""
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
+    item = _apply_fields_filter(item, _get_fields(ctx))
 
     if human:
         _print_detail(item)
@@ -91,6 +115,30 @@ def output_message(message: str, ctx: click.Context | None = None) -> None:
     else:
         result = {"ok": True, "message": message}
         print(json.dumps(result, indent=2))
+
+
+def is_dry_run(ctx: click.Context | None) -> bool:
+    """Check if --dry-run flag is active."""
+    return bool(ctx and ctx.obj and ctx.obj.get("dry_run"))
+
+
+def output_dry_run(action: str, details: dict[str, Any] | None = None, ctx: click.Context | None = None) -> None:
+    """Output what would be done in dry-run mode."""
+    human = ctx.obj.get("human", False) if ctx and ctx.obj else False
+
+    if human:
+        from rich.console import Console
+
+        console = Console()
+        console.print(f"[yellow][DRY RUN][/yellow] {action}")
+        if details:
+            for k, v in details.items():
+                console.print(f"  {k}: {v}")
+    else:
+        result: dict[str, Any] = {"ok": True, "dry_run": True, "action": action}
+        if details:
+            result["details"] = details
+        print(json.dumps(result, indent=2, default=_serialize))
 
 
 # ---- Rich table helpers ----
