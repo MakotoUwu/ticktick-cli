@@ -234,6 +234,59 @@ class V2Client(BaseClient):
         e = end.strftime("%Y%m%d")
         return self.get(f"/pomodoros/statistics/dist/{s}/{e}")
 
+    def get_focus_stats(self) -> dict[str, Any]:
+        """Get general focus statistics (today & total pomodoro counts/durations)."""
+        return self.get("/pomodoros/statistics/generalForDesktop")
+
+    def get_timer(self) -> list[dict]:
+        """Get active pomodoro timer(s). Returns [] when no timer running."""
+        return self.get("/timer")
+
+    def batch_pomodoros(
+        self,
+        add: list[dict] | None = None,
+        update: list[dict] | None = None,
+        delete: list[dict] | None = None,
+    ) -> dict[str, Any]:
+        """Create/update/delete pomodoro records (batch).
+
+        Returns ``{"id2etag": {...}, "id2error": {}}``.
+        """
+        data = {"add": add or [], "update": update or [], "delete": delete or []}
+        return self.post("/batch/pomodoro", json_data=data)
+
+    def delete_pomodoro(self, pomodoro_id: str) -> Any:
+        """Delete a single pomodoro record by ID."""
+        return self.delete(f"/pomodoro/{pomodoro_id}")
+
+    def focus_op(
+        self, last_point: int, operations: list[dict]
+    ) -> dict[str, Any]:
+        """Send focus session operations (start/pause/drop/exit) to the timer service.
+
+        This uses a **separate host** (ms.ticktick.com) from the main API.
+        """
+        data = {"lastPoint": last_point, "opList": operations}
+        return self._focus_request(json_data=data)
+
+    def _focus_request(self, *, json_data: Any = None) -> Any:
+        """POST to the focus timer service at ms.ticktick.com.
+
+        Uses a separate httpx client because the main one is bound to
+        api.ticktick.com.
+        """
+        import httpx as _httpx
+
+        headers = self._get_auth_headers()
+        headers["Content-Type"] = "application/json"
+        response = _httpx.post(
+            "https://ms.ticktick.com/focus/batch/focusOp",
+            headers=headers,
+            json=json_data,
+            timeout=30.0,
+        )
+        return self._handle_response(response, "/focus/batch/focusOp")
+
     # ── Habits ────────────────────────────────────────────────
 
     def get_habits(self) -> list[dict]:
