@@ -12,8 +12,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TickTick_API-100%25_coverage-brightgreen" alt="API Coverage">
   <a href="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml"><img src="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-115_passing-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/output-JSON_%7C_Rich_Tables-blue" alt="Output Modes">
+  <img src="https://img.shields.io/badge/tests-245_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/output-JSON_%7C_CSV_%7C_YAML_%7C_Rich_Tables-blue" alt="Output Modes">
 </p>
 
 ---
@@ -30,11 +30,17 @@ The [emerging consensus](https://steipete.me/posts/2025/peekaboo-2-freeing-the-c
 
 - **JSON output by default** -- structured `{"ok": true, "data": [...]}` responses, parseable by any agent or script
 - **`--human` flag** -- switch to rich terminal tables with a single flag
-- **100% API coverage** -- tasks, subtasks, projects, folders, tags, kanban columns, habits, focus/pomodoro stats, user profile
+- **100% API coverage** -- tasks, subtasks, projects, folders, tags, kanban columns, habits, focus/pomodoro (including live timer), user profile
 - **Dual API support** -- V1 (official OAuth 2.0) + V2 (unofficial session-based) for full feature access
-- **Agent-friendly design** -- no interactive prompts, `--yes` flags, deterministic exit codes (0/1/2)
+- **Focus timer control** -- start, stop, log, and delete pomodoro sessions directly from CLI
+- **Multiple output formats** -- JSON (default), CSV, YAML, or rich terminal tables (`--human`)
+- **Natural language dates** -- `--due tomorrow`, `--start "next monday"`, `--due "in 3 days"`
+- **Agent-friendly design** -- no interactive prompts, `--yes` flags, `--dry-run`, deterministic exit codes (0/1/2)
+- **Field selection** -- `--fields id,title,priority` to return only what you need
 - **Multiple profiles** -- `--profile work` / `--profile personal` for separate accounts
 - **Security-first** -- OAuth CSRF protection, encrypted credential storage (600 permissions), env var support for secrets
+- **Shell completions** -- bash, zsh, fish auto-complete out of the box
+- **Retry with backoff** -- automatic retries for transient API errors, V1 token auto-refresh
 
 ## Table of Contents
 
@@ -96,7 +102,7 @@ ticktick task list
 # Same thing, but as a rich table
 ticktick --human task list
 
-# Add a task
+# Add a task (natural language dates!)
 ticktick task add "Review pull request" --priority high --due tomorrow
 
 # Complete it
@@ -108,8 +114,21 @@ ticktick task overdue
 # Check your habits
 ticktick --human habit list
 
+# Start a 25-minute focus session
+ticktick focus start --duration 25
+
+# Check focus timer status
+ticktick focus status
+
 # Focus stats for the last 30 days
 ticktick focus heatmap --days 30
+
+# Output as CSV or YAML
+ticktick task list --output csv
+ticktick habit list --output yaml
+
+# Select specific fields
+ticktick task list --fields id,title,priority
 
 # Full account sync
 ticktick sync
@@ -156,17 +175,20 @@ ticktick sync
 | **Tags** | `list` `create` `edit` `rename` `merge` `delete` | V2 |
 | **Kanban** | `column list` `create` `edit` `delete` | V2 |
 | **Habits** | `list` `show` `create` `edit` `delete` `checkin` `history` `archive` `unarchive` | V2 |
-| **Focus** | `heatmap` `by-tag` | V2 |
+| **Focus** | `start` `stop` `status` `log` `delete` `stats` `heatmap` `by-tag` | V2 |
 | **User** | `profile` `status` `stats` `preferences` | V2 |
 | **Config** | `set` `get` `list` `path` | -- |
-| **Auth** | `login` `login-v2` `logout` `status` | -- |
-| **Sync** | Full state dump (all tasks, projects, tags, groups) | V2 |
+| **Auth** | `login` `login-v2` `logout` `status` `refresh` | -- |
+| **Utilities** | `sync` `schema` `completion` `version` | V2 |
 
 ### Global Options
 
 | Flag | Description |
 |------|-------------|
 | `--human` | Rich table output instead of JSON |
+| `--output FORMAT` | Output format: `json` (default), `csv`, `yaml` |
+| `--fields FIELDS` | Comma-separated list of fields to include |
+| `--dry-run` | Preview what would happen without making changes |
 | `--verbose` | Enable debug output |
 | `--profile NAME` | Auth profile to use (default: `default`) |
 | `--version` | Show version |
@@ -306,7 +328,7 @@ pip install -e ".[dev]"
 # Run tests
 pytest -v
 
-# All 115 tests should pass
+# All 245 tests should pass
 ```
 
 ### Project Structure
@@ -314,36 +336,62 @@ pytest -v
 ```
 src/ticktick_cli/
   api/
-    base.py        # Shared HTTP transport
+    base.py        # Shared HTTP transport with retry & backoff
     v1.py          # Official OAuth2 API client
-    v2.py          # Unofficial session API client
+    v2.py          # Unofficial session API client (incl. focus timer)
     client.py      # Unified TickTickClient
+  models/
+    task.py        # Task, TaskPriority, TaskStatus
+    project.py     # Project, ProjectKind, ProjectViewMode
+    tag.py         # Tag
+    habit.py       # Habit, HabitCheckin
+    pomodoro.py    # Pomodoro, FocusOperation, PomodoroStatus
   commands/
-    auth_cmd.py    # login, login-v2, logout, status
+    auth_cmd.py    # login, login-v2, logout, status, refresh
     task_cmd.py    # 16 task commands
     project_cmd.py # CRUD for projects
     folder_cmd.py  # CRUD for folders
-    tag_cmd.py     # tag management
+    tag_cmd.py     # tag management + merge
     kanban_cmd.py  # kanban columns
     subtask_cmd.py # subtask parent/child
-    habit_cmd.py   # habit tracking
-    focus_cmd.py   # pomodoro/focus stats
+    habit_cmd.py   # habit tracking + checkins
+    focus_cmd.py   # pomodoro timer + stats
     user_cmd.py    # profile, stats, preferences
     config_cmd.py  # CLI config management
+    schema_cmd.py  # CLI structure discovery for agents
   auth.py          # OAuth2 + V2 auth flows
   config.py        # XDG config management
-  output.py        # JSON/Rich table output
+  output.py        # JSON/CSV/YAML/Rich table output
+  dates.py         # Natural language date parsing
   exceptions.py    # Custom exception hierarchy
   cli.py           # Main entry point
 ```
 
 ## Roadmap
 
+### Done
+
+- [x] Shell completions (bash, zsh, fish)
+- [x] V1 token auto-refresh
+- [x] CI/CD with GitHub Actions
+- [x] CSV and YAML output formats
+- [x] Natural language date parsing
+- [x] Field selection (`--fields`)
+- [x] Dry-run mode (`--dry-run`)
+- [x] Retry with exponential backoff
+- [x] Focus/Pomodoro live timer control
+- [x] Pydantic models for all entities
+- [x] `schema` command for agent discovery
+
+### Next
+
 - [ ] Publish to PyPI
-- [ ] Shell completions (bash, zsh, fish)
-- [ ] Token auto-refresh for V1 OAuth
 - [ ] Homebrew formula
-- [ ] CI/CD with GitHub Actions
+- [ ] Smart lists / saved filters
+- [ ] Task comments
+- [ ] Activity feed / change history
+- [ ] Advanced productivity reports
+- [ ] Focus session ↔ task linking
 
 ## License
 
