@@ -18,10 +18,15 @@ from ticktick_cli.output import (
 )
 
 
-def _make_ctx(human: bool = False, fields: list[str] | None = None, dry_run: bool = False) -> click.Context:
+def _make_ctx(
+    human: bool = False,
+    fields: list[str] | None = None,
+    dry_run: bool = False,
+    output_format: str = "json",
+) -> click.Context:
     """Create a click Context with obj dict."""
     ctx = click.Context(click.Command("test"))
-    ctx.obj = {"human": human, "fields": fields, "dry_run": dry_run}
+    ctx.obj = {"human": human, "fields": fields, "dry_run": dry_run, "output_format": output_format}
     return ctx
 
 
@@ -168,3 +173,86 @@ class TestDryRun:
         data = json.loads(captured.out)
         assert data["dry_run"] is True
         assert "details" not in data
+
+
+class TestCsvOutput:
+    def test_output_list_csv(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="csv")
+        items = [{"id": "1", "name": "First"}, {"id": "2", "name": "Second"}]
+        output_list(items, columns=["id", "name"], ctx=ctx)
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert lines[0] == "id,name"
+        assert lines[1] == "1,First"
+        assert lines[2] == "2,Second"
+
+    def test_output_item_csv(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="csv")
+        output_item({"id": "task1", "title": "Test Task"}, ctx)
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert lines[0] == "id,title"
+        assert lines[1] == "task1,Test Task"
+
+    def test_output_list_csv_empty(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="csv")
+        output_list([], ctx=ctx)
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_output_list_csv_with_list_values(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="csv")
+        items = [{"id": "1", "tags": ["a", "b"]}]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        # CSV quotes JSON values that contain commas
+        assert "tags" in captured.out
+        assert "a" in captured.out
+        assert "b" in captured.out
+
+    def test_csv_with_fields(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="csv", fields=["id"])
+        items = [{"id": "1", "name": "First", "extra": "data"}]
+        output_list(items, columns=["id", "name"], ctx=ctx)
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert lines[0] == "id"
+        assert lines[1] == "1"
+
+
+class TestYamlOutput:
+    def test_output_item_yaml(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="yaml")
+        output_item({"id": "t1", "title": "Test", "priority": 5}, ctx)
+        captured = capsys.readouterr()
+        assert "id: t1" in captured.out
+        assert "title: Test" in captured.out
+        assert "priority: 5" in captured.out
+
+    def test_output_list_yaml(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="yaml")
+        items = [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        assert "- id: 1" in captured.out
+        assert "  name: A" in captured.out
+        assert "- id: 2" in captured.out
+
+    def test_yaml_null_values(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="yaml")
+        output_item({"id": "1", "value": None}, ctx)
+        captured = capsys.readouterr()
+        assert "value: null" in captured.out
+
+    def test_yaml_bool_values(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="yaml")
+        output_item({"done": True, "archived": False}, ctx)
+        captured = capsys.readouterr()
+        assert "done: true" in captured.out
+        assert "archived: false" in captured.out
+
+    def test_output_success_yaml(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(output_format="yaml")
+        output_success({"key": "value"}, ctx)
+        captured = capsys.readouterr()
+        assert "key: value" in captured.out

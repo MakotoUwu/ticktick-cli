@@ -8,6 +8,7 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
+from ticktick_cli.dates import parse_date
 from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
@@ -56,7 +57,7 @@ def task_group() -> None:
     default="none",
     help="Task priority",
 )
-@click.option("--due", "-d", default=None, help="Due date (YYYY-MM-DD, 'today', 'tomorrow', '+3d')")
+@click.option("--due", "-d", default=None, help="Due date (YYYY-MM-DD, today, tomorrow, monday, +3d, +1w, +2m)")
 @click.option("--start", default=None, help="Start date")
 @click.option("--tag", "-t", multiple=True, help="Tags (repeatable)")
 @click.option("--all-day", is_flag=True, help="Mark as all-day task")
@@ -86,9 +87,9 @@ def task_add(
         task_data["content"] = content
     task_data["priority"] = PRIORITY_MAP[priority]
     if due:
-        task_data["dueDate"] = _parse_date(due)
+        task_data["dueDate"] = parse_date(due)
     if start:
-        task_data["startDate"] = _parse_date(start)
+        task_data["startDate"] = parse_date(start)
     if tag:
         task_data["tags"] = list(tag)
     if all_day:
@@ -227,9 +228,9 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
     if kwargs.get("priority"):
         update["priority"] = PRIORITY_MAP[kwargs["priority"]]
     if kwargs.get("due"):
-        update["dueDate"] = _parse_date(kwargs["due"])
+        update["dueDate"] = parse_date(kwargs["due"])
     if kwargs.get("start"):
-        update["startDate"] = _parse_date(kwargs["start"])
+        update["startDate"] = parse_date(kwargs["start"])
     if kwargs.get("project"):
         update["projectId"] = _resolve_project_id(client, kwargs["project"])
     if kwargs.get("tag"):
@@ -498,26 +499,6 @@ def _resolve_project_id(client: Any, name_or_id: str) -> str:
             return proj["id"]
     return name_or_id  # Fallback: treat as ID
 
-
-def _parse_date(date_str: str) -> str:
-    """Parse human date strings to ISO format."""
-    now = datetime.now()
-    lower = date_str.lower().strip()
-
-    if lower == "today":
-        return now.strftime("%Y-%m-%dT00:00:00.000+0000")
-    elif lower == "tomorrow":
-        return (now + timedelta(days=1)).strftime("%Y-%m-%dT00:00:00.000+0000")
-    elif lower.startswith("+") and lower.endswith("d"):
-        days = int(lower[1:-1])
-        return (now + timedelta(days=days)).strftime("%Y-%m-%dT00:00:00.000+0000")
-    else:
-        # Assume ISO date
-        try:
-            dt = datetime.fromisoformat(date_str)
-            return dt.strftime("%Y-%m-%dT%H:%M:%S.000+0000")
-        except ValueError:
-            return date_str
 
 
 def _filter_by_due(tasks: list[dict], due_filter: str) -> list[dict]:

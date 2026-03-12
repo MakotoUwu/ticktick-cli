@@ -18,6 +18,7 @@ from ticktick_cli.commands.folder_cmd import folder_group
 from ticktick_cli.commands.habit_cmd import habit_group
 from ticktick_cli.commands.kanban_cmd import column_group
 from ticktick_cli.commands.project_cmd import project_group
+from ticktick_cli.commands.schema_cmd import schema_command
 from ticktick_cli.commands.subtask_cmd import subtask_group
 from ticktick_cli.commands.tag_cmd import tag_group
 from ticktick_cli.commands.task_cmd import task_group
@@ -31,12 +32,13 @@ from ticktick_cli.output import output_error, output_item
 @click.option("--profile", default="default", help="Auth profile to use.")
 @click.option("--fields", default=None, help="Comma-separated list of fields to include in output (e.g., id,title,priority).")
 @click.option("--dry-run", is_flag=True, help="Show what would be done without executing.")
+@click.option("--output", "-o", "output_format", type=click.Choice(["json", "csv", "yaml"]), default="json", help="Output format (default: json).")
 @click.version_option(version=__version__, prog_name="ticktick-cli")
 @click.pass_context
-def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: str | None, dry_run: bool) -> None:
+def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: str | None, dry_run: bool, output_format: str) -> None:
     """TickTick CLI — agent-native command-line interface for TickTick.
 
-    JSON output by default. Use --human for rich tables.
+    JSON output by default. Use --human for rich tables, --output csv/yaml for other formats.
     """
     ctx.ensure_object(dict)
     ctx.obj["human"] = human
@@ -44,6 +46,7 @@ def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: st
     ctx.obj["profile"] = profile
     ctx.obj["fields"] = [f.strip() for f in fields.split(",")] if fields else None
     ctx.obj["dry_run"] = dry_run
+    ctx.obj["output_format"] = output_format
 
 
 # ── Register all command groups ──────────────────────────
@@ -59,6 +62,7 @@ cli.add_command(habit_group, "habit")
 cli.add_command(focus_group, "focus")
 cli.add_command(user_group, "user")
 cli.add_command(config_group, "config")
+cli.add_command(schema_command, "schema")
 
 
 # ── Standalone commands ──────────────────────────────────
