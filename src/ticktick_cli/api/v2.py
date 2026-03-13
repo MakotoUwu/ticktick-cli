@@ -322,6 +322,34 @@ class V2Client(BaseClient):
         data = {"add": add or [], "update": update or [], "delete": delete or []}
         return self.post("/habitCheckins/batch", json_data=data)
 
+    # ── Filters (Smart Lists) ─────────────────────────────────
+
+    def batch_filters(
+        self,
+        add: list[dict] | None = None,
+        update: list[dict] | None = None,
+        delete: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create/update/delete saved filters (smart lists)."""
+        data = {"add": add or [], "update": update or [], "delete": delete or []}
+        return self.post("/batch/filter", json_data=data)
+
+    # ── Templates ─────────────────────────────────────────────
+
+    def get_templates(self) -> dict[str, Any]:
+        """Get all task templates."""
+        return self.get("/templates")
+
+    def batch_templates(
+        self,
+        add: list[dict] | None = None,
+        update: list[dict] | None = None,
+        delete: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create/update/delete task templates."""
+        data = {"add": add or [], "update": update or [], "delete": delete or []}
+        return self.post("/templates/task", json_data=data)
+
     # ── Task Comments ─────────────────────────────────────────
 
     def get_task_comments(self, project_id: str, task_id: str) -> list[dict]:

@@ -604,6 +604,41 @@ def task_duplicate(ctx: click.Context, task_id: str) -> None:
         raise SystemExit(1) from None
 
 
+# ── Convert (task ↔ note) ─────────────────────────────────────
+
+
+@task_group.command("convert")
+@click.argument("task_id")
+@click.option(
+    "--to",
+    "target_kind",
+    required=True,
+    type=click.Choice(["note", "task"]),
+    help="Convert to 'note' or back to 'task'",
+)
+@click.pass_context
+def task_convert(ctx: click.Context, task_id: str, target_kind: str) -> None:
+    """Convert a task to a note or a note back to a task."""
+    kind_value = "NOTE" if target_kind == "note" else "TEXT"
+
+    if is_dry_run(ctx):
+        output_dry_run("task.convert", {"task_id": task_id, "kind": kind_value}, ctx)
+        return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        task = client.v2.get_task(task_id)
+        client.v2.batch_tasks(update=[{
+            "id": task_id,
+            "projectId": task.get("projectId", ""),
+            "kind": kind_value,
+        }])
+        output_message(f"Task {task_id} converted to {target_kind}.", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
 # ── Helpers ───────────────────────────────────────────────────
 
 

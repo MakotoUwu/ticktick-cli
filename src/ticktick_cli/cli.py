@@ -13,6 +13,7 @@ from ticktick_cli.auth import get_client
 # Import all command groups
 from ticktick_cli.commands.auth_cmd import auth_group
 from ticktick_cli.commands.config_cmd import config_group
+from ticktick_cli.commands.filter_cmd import filter_group
 from ticktick_cli.commands.focus_cmd import focus_group
 from ticktick_cli.commands.folder_cmd import folder_group
 from ticktick_cli.commands.habit_cmd import habit_group
@@ -22,6 +23,7 @@ from ticktick_cli.commands.schema_cmd import schema_command
 from ticktick_cli.commands.subtask_cmd import subtask_group
 from ticktick_cli.commands.tag_cmd import tag_group
 from ticktick_cli.commands.task_cmd import task_group
+from ticktick_cli.commands.template_cmd import template_group
 from ticktick_cli.commands.user_cmd import user_group
 from ticktick_cli.output import output_error, output_item
 
@@ -60,6 +62,8 @@ cli.add_command(column_group, "column")
 cli.add_command(subtask_group, "subtask")
 cli.add_command(habit_group, "habit")
 cli.add_command(focus_group, "focus")
+cli.add_command(filter_group, "filter")
+cli.add_command(template_group, "template")
 cli.add_command(user_group, "user")
 cli.add_command(config_group, "config")
 cli.add_command(schema_command, "schema")
