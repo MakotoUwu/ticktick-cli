@@ -7,8 +7,10 @@ from typing import Any
 
 import click
 
+from ticktick_cli.api.v2 import _generate_object_id
 from ticktick_cli.auth import get_client
 from ticktick_cli.dates import parse_date
+from ticktick_cli.models.comment import Activity, Comment
 from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
@@ -481,6 +483,122 @@ def task_batch_add(ctx: click.Context, filepath: str) -> None:
             tasks = [tasks]
         client.v2.batch_tasks(add=tasks)
         output_message(f"Created {len(tasks)} task(s) from {filepath}.", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+# ── Comment subgroup ──────────────────────────────────────────
+
+
+@task_group.group("comment")
+def comment_group() -> None:
+    """Manage task comments."""
+
+
+@comment_group.command("list")
+@click.argument("task_id")
+@click.option("--project", "project_id", default=None, help="Project ID (auto-detected if omitted)")
+@click.pass_context
+def comment_list(ctx: click.Context, task_id: str, project_id: str | None) -> None:
+    """List comments on a task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        if not project_id:
+            task = client.v2.get_task(task_id)
+            project_id = task.get("projectId", "")
+        raw = client.v2.get_task_comments(project_id, task_id)
+        comments = [Comment(**c).to_output() for c in raw]
+        output_list(comments, columns=["id", "title", "createdTime"], title="Comments", ctx=ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@comment_group.command("add")
+@click.argument("task_id")
+@click.argument("text")
+@click.option("--project", "project_id", default=None, help="Project ID (auto-detected if omitted)")
+@click.pass_context
+def comment_add(ctx: click.Context, task_id: str, text: str, project_id: str | None) -> None:
+    """Add a comment to a task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    if is_dry_run(ctx):
+        output_dry_run("task.comment.add", {"task_id": task_id, "text": text}, ctx)
+        return
+    try:
+        if not project_id:
+            task = client.v2.get_task(task_id)
+            project_id = task.get("projectId", "")
+        client.v2.create_task_comment(project_id, task_id, text)
+        output_message("Comment added.", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@comment_group.command("delete")
+@click.argument("task_id")
+@click.argument("comment_id")
+@click.option("--project", "project_id", default=None, help="Project ID (auto-detected if omitted)")
+@click.pass_context
+def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id: str | None) -> None:
+    """Delete a comment from a task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    if is_dry_run(ctx):
+        output_dry_run("task.comment.delete", {"comment_id": comment_id}, ctx)
+        return
+    try:
+        if not project_id:
+            task = client.v2.get_task(task_id)
+            project_id = task.get("projectId", "")
+        client.v2.delete_task_comment(project_id, task_id, comment_id)
+        output_message("Comment deleted.", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+# ── Activity command ──────────────────────────────────────────
+
+
+@task_group.command("activity")
+@click.argument("task_id")
+@click.pass_context
+def task_activity(ctx: click.Context, task_id: str) -> None:
+    """Show change history for a task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        raw = client.v2.get_task_activities(task_id)
+        activities = [Activity(**a).to_output() for a in raw]
+        output_list(activities, columns=["id", "action", "when"], title="Activities", ctx=ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+# ── Duplicate command ─────────────────────────────────────────
+
+
+@task_group.command("duplicate")
+@click.argument("task_id")
+@click.pass_context
+def task_duplicate(ctx: click.Context, task_id: str) -> None:
+    """Duplicate a task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    if is_dry_run(ctx):
+        output_dry_run("task.duplicate", {"task_id": task_id}, ctx)
+        return
+    try:
+        task = client.v2.get_task(task_id)
+        new_task = dict(task)
+        new_task["id"] = _generate_object_id()
+        new_task["title"] = task.get("title", "") + " (copy)"
+        # Remove server-generated fields
+        for key in ("etag", "sortOrder", "modifiedTime", "createdTime"):
+            new_task.pop(key, None)
+        client.v2.batch_tasks(add=[new_task])
+        output_message(f"Task duplicated. New ID: {new_task['id']}", ctx)
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

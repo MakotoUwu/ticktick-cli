@@ -321,3 +321,44 @@ class V2Client(BaseClient):
     ) -> dict[str, Any]:
         data = {"add": add or [], "update": update or [], "delete": delete or []}
         return self.post("/habitCheckins/batch", json_data=data)
+
+    # ── Task Comments ─────────────────────────────────────────
+
+    def get_task_comments(self, project_id: str, task_id: str) -> list[dict]:
+        """Get all comments for a task."""
+        return self.get(f"/project/{project_id}/task/{task_id}/comments")
+
+    def create_task_comment(
+        self, project_id: str, task_id: str, title: str
+    ) -> Any:
+        """Add a comment to a task."""
+        data = {
+            "id": _generate_object_id(),
+            "taskId": task_id,
+            "projectId": project_id,
+            "title": title,
+            "isNew": True,
+            "createdTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
+            "userProfile": {"isMyself": True},
+        }
+        return self.post(f"/project/{project_id}/task/{task_id}/comment", json_data=data)
+
+    def delete_task_comment(
+        self, project_id: str, task_id: str, comment_id: str
+    ) -> Any:
+        """Delete a task comment."""
+        return self.delete(f"/project/{project_id}/task/{task_id}/comment/{comment_id}")
+
+    # ── Task Activities ────────────────────────────────────────
+
+    def get_task_activities(self, task_id: str) -> list[dict]:
+        """Get change history for a task. Uses V1 API path."""
+        import httpx as _httpx
+
+        headers = self._get_auth_headers()
+        response = _httpx.get(
+            f"https://api.ticktick.com/api/v1/task/activity/{task_id}",
+            headers=headers,
+            timeout=30.0,
+        )
+        return self._handle_response(response, f"/api/v1/task/activity/{task_id}")

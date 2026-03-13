@@ -1,5 +1,6 @@
 """Data models for TickTick entities."""
 
+from ticktick_cli.models.comment import Activity, Comment, UserProfile
 from ticktick_cli.models.habit import Habit, HabitCheckin
 from ticktick_cli.models.pomodoro import (
     FocusOperation,
@@ -12,6 +13,8 @@ from ticktick_cli.models.tag import Tag
 from ticktick_cli.models.task import Task, TaskPriority, TaskStatus
 
 __all__ = [
+    "Activity",
+    "Comment",
     "FocusOperation",
     "Habit",
     "HabitCheckin",
@@ -25,4 +28,5 @@ __all__ = [
     "Task",
     "TaskPriority",
     "TaskStatus",
+    "UserProfile",
 ]
