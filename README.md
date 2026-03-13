@@ -12,7 +12,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TickTick_API-100%25_coverage-brightgreen" alt="API Coverage">
   <a href="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml"><img src="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-272_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-314_passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/output-JSON_%7C_CSV_%7C_YAML_%7C_Rich_Tables-blue" alt="Output Modes">
 </p>
 
@@ -30,7 +30,7 @@ The [emerging consensus](https://steipete.me/posts/2025/peekaboo-2-freeing-the-c
 
 - **JSON output by default** -- structured `{"ok": true, "data": [...]}` responses, parseable by any agent or script
 - **`--human` flag** -- switch to rich terminal tables with a single flag
-- **100% API coverage** -- tasks, subtasks, projects, folders, tags, kanban columns, habits, focus/pomodoro (including live timer), user profile
+- **100% API coverage** -- tasks, subtasks, projects, folders, tags, kanban columns, habits, focus/pomodoro (including live timer), filters, templates, user profile
 - **Dual API support** -- V1 (official OAuth 2.0) + V2 (unofficial session-based) for full feature access
 - **Focus timer control** -- start, stop, log, and delete pomodoro sessions directly from CLI
 - **Multiple output formats** -- JSON (default), CSV, YAML, or rich terminal tables (`--human`)
@@ -168,7 +168,7 @@ ticktick sync
 
 | Domain | Commands | API |
 |--------|----------|-----|
-| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` `duplicate` `activity` `comment list` `comment add` `comment delete` | V1+V2 |
+| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` `duplicate` `convert` `activity` `comment list` `comment add` `comment delete` | V1+V2 |
 | **Subtasks** | `set` `unset` `list` | V2 |
 | **Projects** | `list` `create` `show` `edit` `delete` | V1+V2 |
 | **Folders** | `list` `create` `rename` `delete` | V2 |
@@ -176,6 +176,8 @@ ticktick sync
 | **Kanban** | `column list` `create` `edit` `delete` | V2 |
 | **Habits** | `list` `show` `create` `edit` `delete` `checkin` `history` `archive` `unarchive` | V2 |
 | **Focus** | `start` `stop` `status` `log` `delete` `stats` `heatmap` `by-tag` | V2 |
+| **Filters** | `list` `show` `create` `edit` `delete` | V2 |
+| **Templates** | `list` `show` `create` `delete` | V2 |
 | **User** | `profile` `status` `stats` `preferences` | V2 |
 | **Config** | `set` `get` `list` `path` | -- |
 | **Auth** | `login` `login-v2` `logout` `status` `refresh` | -- |
@@ -328,7 +330,7 @@ pip install -e ".[dev]"
 # Run tests
 pytest -v
 
-# All 272 tests should pass
+# All 314 tests should pass
 ```
 
 ### Project Structure
@@ -347,9 +349,11 @@ src/ticktick_cli/
     habit.py       # Habit, HabitCheckin
     pomodoro.py    # Pomodoro, FocusOperation, PomodoroStatus
     comment.py     # Comment, Activity, UserProfile
+    filter.py      # Filter, FilterRule, FilterCondition
+    template.py    # TaskTemplate
   commands/
     auth_cmd.py    # login, login-v2, logout, status, refresh
-    task_cmd.py    # 21 task commands + comments
+    task_cmd.py    # 22 task commands + comments + convert
     project_cmd.py # CRUD for projects
     folder_cmd.py  # CRUD for folders
     tag_cmd.py     # tag management + merge
@@ -357,6 +361,8 @@ src/ticktick_cli/
     subtask_cmd.py # subtask parent/child
     habit_cmd.py   # habit tracking + checkins
     focus_cmd.py   # pomodoro timer + stats
+    filter_cmd.py  # saved filters (smart lists) CRUD
+    template_cmd.py # task templates CRUD
     user_cmd.py    # profile, stats, preferences
     config_cmd.py  # CLI config management
     schema_cmd.py  # CLI structure discovery for agents
@@ -386,12 +392,14 @@ src/ticktick_cli/
 - [x] Task comments (list, add, delete)
 - [x] Activity feed / change history
 - [x] Task duplicate
+- [x] Smart lists / saved filters
+- [x] Task templates (save/reuse)
+- [x] Task ↔ Note conversion
 
 ### Next
 
 - [ ] Publish to PyPI
 - [ ] Homebrew formula
-- [ ] Smart lists / saved filters
 - [ ] Advanced productivity reports
 - [ ] Focus session ↔ task linking
 

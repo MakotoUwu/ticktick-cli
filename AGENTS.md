@@ -39,6 +39,12 @@ ticktick task trash [--limit N]
 ticktick task pin TASK_ID
 ticktick task unpin TASK_ID
 ticktick task batch-add --file tasks.json
+ticktick task duplicate TASK_ID
+ticktick task convert TASK_ID --to note|task
+ticktick task activity TASK_ID [--limit N]
+ticktick task comment list TASK_ID
+ticktick task comment add TASK_ID "TEXT"
+ticktick task comment delete TASK_ID COMMENT_ID --yes
 ```
 
 ### Subtasks
@@ -115,6 +121,25 @@ ticktick focus heatmap [--days N]                              # Daily focus hea
 ticktick focus by-tag [--days N]                               # Focus time by tag
 ```
 
+### Filters (Smart Lists)
+
+```bash
+ticktick filter list
+ticktick filter show FILTER_ID
+ticktick filter create "NAME" [--priority high|medium|low|none]... [--date today|tomorrow|thisweek|nextweek|thismonth|nextmonth|overdue|nodate|repeat] [--tag TAG]...
+ticktick filter edit FILTER_ID [--name "NEW"] [--priority P]... [--date D] [--tag T]...
+ticktick filter delete FILTER_ID --yes
+```
+
+### Templates
+
+```bash
+ticktick template list
+ticktick template show TEMPLATE_ID
+ticktick template create "TITLE" [--content "TEXT"] [--items "A,B,C"] [--tag TAG]...
+ticktick template delete TEMPLATE_ID --yes
+```
+
 ### User & Sync
 
 ```bash
@@ -178,15 +203,15 @@ ticktick task list --due this-week
 
 ### Always safe
 
-- Any read command (`list`, `show`, `search`, `today`, `overdue`, `status`, `sync`, `stats`, `heatmap`)
+- Any read command (`list`, `show`, `search`, `today`, `overdue`, `status`, `sync`, `stats`, `heatmap`, `activity`)
 - `ticktick config list` / `ticktick config path`
 - `ticktick schema`
 - `ticktick focus status`
 
 ### Ask user first
 
-- Creating tasks, projects, tags, habits (`add`, `create`)
-- Editing or moving tasks (`edit`, `move`)
+- Creating tasks, projects, tags, habits, filters, templates (`add`, `create`)
+- Editing or moving tasks (`edit`, `move`, `convert`)
 - Checking in habits (`checkin`)
 - Starting/stopping focus timer (`focus start`, `focus stop`)
 - Logging focus records (`focus log`)
@@ -209,11 +234,11 @@ ticktick task list --due this-week
 - Python 3.10+, Click framework, httpx, Rich, Pydantic v2
 - Config: `~/.config/ticktick-cli/<profile>/`
 - Dual API: V1 (OAuth2, official) + V2 (session, full-feature)
-- 245 tests, CI via GitHub Actions
+- 314 tests, CI via GitHub Actions
 
 ## Build & Test
 
 ```bash
 pip install -e ".[dev]"
-pytest -v               # 245 tests
+pytest -v               # 314 tests
 ```

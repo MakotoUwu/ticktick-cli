@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Filters (smart lists)**: `filter list`, `filter show`, `filter create`, `filter edit`, `filter delete` — full CRUD for saved filters with priority, date, and tag conditions
+- **Task templates**: `template list`, `template show`, `template create`, `template delete` — save and reuse task templates
+- **Task ↔ Note conversion**: `task convert TASK_ID --to note|task` — convert between task and note types
+- **Task comments**: `task comment list`, `task comment add`, `task comment delete` — manage task comments
+- **Activity history**: `task activity TASK_ID` — view change history for a task
+- **Task duplicate**: `task duplicate TASK_ID` — duplicate an existing task
+- Pydantic models for Filter, FilterRule, FilterCondition, TaskTemplate, Comment, Activity
+- 314 tests (up from 245)
+
 ## [0.1.0] - 2026-03-12
 
 ### Added
