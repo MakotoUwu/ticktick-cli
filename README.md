@@ -12,7 +12,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TickTick_API-100%25_coverage-brightgreen" alt="API Coverage">
   <a href="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml"><img src="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-245_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-272_passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/output-JSON_%7C_CSV_%7C_YAML_%7C_Rich_Tables-blue" alt="Output Modes">
 </p>
 
@@ -168,7 +168,7 @@ ticktick sync
 
 | Domain | Commands | API |
 |--------|----------|-----|
-| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` | V1+V2 |
+| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` `duplicate` `activity` `comment list` `comment add` `comment delete` | V1+V2 |
 | **Subtasks** | `set` `unset` `list` | V2 |
 | **Projects** | `list` `create` `show` `edit` `delete` | V1+V2 |
 | **Folders** | `list` `create` `rename` `delete` | V2 |
@@ -328,7 +328,7 @@ pip install -e ".[dev]"
 # Run tests
 pytest -v
 
-# All 245 tests should pass
+# All 272 tests should pass
 ```
 
 ### Project Structure
@@ -346,9 +346,10 @@ src/ticktick_cli/
     tag.py         # Tag
     habit.py       # Habit, HabitCheckin
     pomodoro.py    # Pomodoro, FocusOperation, PomodoroStatus
+    comment.py     # Comment, Activity, UserProfile
   commands/
     auth_cmd.py    # login, login-v2, logout, status, refresh
-    task_cmd.py    # 16 task commands
+    task_cmd.py    # 21 task commands + comments
     project_cmd.py # CRUD for projects
     folder_cmd.py  # CRUD for folders
     tag_cmd.py     # tag management + merge
@@ -382,14 +383,15 @@ src/ticktick_cli/
 - [x] Focus/Pomodoro live timer control
 - [x] Pydantic models for all entities
 - [x] `schema` command for agent discovery
+- [x] Task comments (list, add, delete)
+- [x] Activity feed / change history
+- [x] Task duplicate
 
 ### Next
 
 - [ ] Publish to PyPI
 - [ ] Homebrew formula
 - [ ] Smart lists / saved filters
-- [ ] Task comments
-- [ ] Activity feed / change history
 - [ ] Advanced productivity reports
 - [ ] Focus session ↔ task linking
 
