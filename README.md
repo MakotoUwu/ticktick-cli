@@ -403,6 +403,10 @@ src/ticktick_cli/
 - [ ] Advanced productivity reports
 - [ ] Focus session ↔ task linking
 
+## Disclaimer
+
+This project is an unofficial CLI for TickTick and is not affiliated with, endorsed by, or associated with TickTick or Appest Inc. in any way. Use at your own risk.
+
 ## License
 
 [MIT](LICENSE)
