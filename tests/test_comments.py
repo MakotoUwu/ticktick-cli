@@ -255,7 +255,8 @@ class TestCommentAdd:
         assert data["message"] == "Comment added."
         client.v2.create_task_comment.assert_called_once_with("proj1", "task1", "Hello world")
 
-    def test_add_dry_run(self) -> None:
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_add_dry_run(self, _mock_get: MagicMock) -> None:
         runner = CliRunner()
         result = runner.invoke(
             task_group,
@@ -266,6 +267,7 @@ class TestCommentAdd:
         data = json.loads(result.output)
         assert data["dry_run"] is True
         assert data["action"] == "task.comment.add"
+        _mock_get.assert_not_called()
 
 
 class TestCommentDelete:
@@ -305,7 +307,8 @@ class TestCommentDelete:
         client.v2.get_task.assert_not_called()
         client.v2.delete_task_comment.assert_called_once_with("proj99", "task1", "comment1")
 
-    def test_delete_dry_run(self) -> None:
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_delete_dry_run(self, _mock_get: MagicMock) -> None:
         runner = CliRunner()
         result = runner.invoke(
             task_group,
@@ -316,6 +319,7 @@ class TestCommentDelete:
         data = json.loads(result.output)
         assert data["dry_run"] is True
         assert data["action"] == "task.comment.delete"
+        _mock_get.assert_not_called()
 
 
 class TestTaskActivity:
@@ -399,7 +403,8 @@ class TestTaskDuplicate:
         assert "createdTime" not in added
         assert added["projectId"] == "proj1"
 
-    def test_duplicate_dry_run(self) -> None:
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_duplicate_dry_run(self, _mock_get: MagicMock) -> None:
         runner = CliRunner()
         result = runner.invoke(
             task_group, ["duplicate", "orig1"], obj=_make_ctx(dry_run=True)
@@ -408,3 +413,4 @@ class TestTaskDuplicate:
         data = json.loads(result.output)
         assert data["dry_run"] is True
         assert data["action"] == "task.duplicate"
+        _mock_get.assert_not_called()

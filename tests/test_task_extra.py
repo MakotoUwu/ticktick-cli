@@ -153,7 +153,8 @@ class TestTaskEdit:
         assert updated["priority"] == 1  # low maps to 1
         assert updated["content"] == "Body"
 
-    def test_edit_dry_run(self) -> None:
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_edit_dry_run(self, _mock_get: MagicMock) -> None:
         runner = CliRunner()
         result = runner.invoke(
             task_group,
@@ -165,6 +166,7 @@ class TestTaskEdit:
         assert data["dry_run"] is True
         assert data["action"] == "task.edit"
         assert data["details"]["title"] == "Dry Title"
+        _mock_get.assert_not_called()
 
     @patch("ticktick_cli.commands.task_cmd.get_client")
     def test_edit_api_error(self, mock_get: MagicMock) -> None:

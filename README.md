@@ -8,11 +8,12 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/unofficial-community_project-orange" alt="Unofficial">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TickTick_API-100%25_coverage-brightgreen" alt="API Coverage">
   <a href="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml"><img src="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-314_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-393_passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/output-JSON_%7C_CSV_%7C_YAML_%7C_Rich_Tables-blue" alt="Output Modes">
 </p>
 
@@ -373,6 +374,31 @@ src/ticktick_cli/
   exceptions.py    # Custom exception hierarchy
   cli.py           # Main entry point
 ```
+
+## Why This Over the Official CLI?
+
+This is an **unofficial, community-built** CLI. TickTick released their own [`@ticktick/ticktick-cli`](https://www.npmjs.com/package/@ticktick/ticktick-cli) in March 2025, and various MCP servers exist on the [LobeHub registry](https://lobehub.com). Here's how they compare:
+
+| Feature | **ticktick-cli** (this) | Official CLI | MCP Servers |
+|---------|------------------------|-------------|-------------|
+| Commands | **70+** | ~12 | 5-15 |
+| API coverage | V1 + V2 (100%) | V1 only | V1 only |
+| Habits, Focus, Kanban | Yes | No | No |
+| Filters, Templates | Yes | No | No |
+| Comments, Activity feed | Yes | No | No |
+| JSON-first output | `{"ok": true, "data": ...}` | `--json` flag | JSON-RPC |
+| CSV / YAML / Rich tables | Yes | No | No |
+| `--dry-run` | All mutating commands | No | No |
+| `--fields` selection | Yes | No | No |
+| `schema` introspection | Yes | No | Partial |
+| Natural language dates | Yes | No | No |
+| Retry with backoff | Yes | No | No |
+| Shell completions | bash, zsh, fish | No | N/A |
+| Works without runtime | Yes (just Python) | Yes (Node.js) | Needs MCP host |
+| Agent-native design | Built for it | Afterthought | Agent-only |
+| Human-friendly | `--human` tables | Basic | No |
+
+**TL;DR:** The official CLI covers basic task/project CRUD. MCP servers are agent-only with limited coverage. This CLI covers the entire API surface, works for both humans and agents, and includes features like focus timers, habits, and kanban that no other tool provides.
 
 ## Roadmap
 

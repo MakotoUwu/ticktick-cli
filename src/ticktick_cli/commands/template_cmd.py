@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import click
@@ -77,7 +77,7 @@ def template_create(
     """Create a new task template."""
     template_data: dict[str, Any] = {
         "id": _generate_object_id(),
-        "createdTime": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
+        "createdTime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
         "title": title,
         "tags": list(tag),
     }
