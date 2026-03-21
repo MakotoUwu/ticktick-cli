@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from ticktick_cli.commands.filter_cmd import filter_group
-from ticktick_cli.commands.template_cmd import template_group
 from ticktick_cli.commands.task_cmd import task_group
+from ticktick_cli.commands.template_cmd import template_group
 from ticktick_cli.models.filter import Filter, FilterCondition, FilterRule
 from ticktick_cli.models.template import TaskTemplate
 

@@ -147,7 +147,7 @@ def filter_create(
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
-        result = client.v2.batch_filters(add=[filter_data])
+        client.v2.batch_filters(add=[filter_data])
         output_message(f"Filter created: {name} (id: {filter_data['id']})", ctx)
     except Exception as e:
         output_error(str(e), ctx)
