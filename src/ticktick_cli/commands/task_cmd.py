@@ -220,8 +220,6 @@ def task_show(ctx: click.Context, task_id: str) -> None:
 @click.pass_context
 def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
     """Edit a task's properties."""
-    client = get_client(ctx.obj.get("profile", "default"))
-
     update: dict[str, Any] = {"id": task_id}
     if kwargs.get("title"):
         update["title"] = kwargs["title"]
@@ -233,8 +231,6 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
         update["dueDate"] = parse_date(kwargs["due"])
     if kwargs.get("start"):
         update["startDate"] = parse_date(kwargs["start"])
-    if kwargs.get("project"):
-        update["projectId"] = _resolve_project_id(client, kwargs["project"])
     if kwargs.get("tag"):
         update["tags"] = list(kwargs["tag"])
     if kwargs.get("repeat"):
@@ -246,6 +242,9 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
         output_dry_run("task.edit", update, ctx)
         return
 
+    client = get_client(ctx.obj.get("profile", "default"))
+    if kwargs.get("project"):
+        update["projectId"] = _resolve_project_id(client, kwargs["project"])
     try:
         if client.has_v2:
             # Need projectId for V2 update
@@ -522,10 +521,10 @@ def comment_list(ctx: click.Context, task_id: str, project_id: str | None) -> No
 @click.pass_context
 def comment_add(ctx: click.Context, task_id: str, text: str, project_id: str | None) -> None:
     """Add a comment to a task."""
-    client = get_client(ctx.obj.get("profile", "default"))
     if is_dry_run(ctx):
         output_dry_run("task.comment.add", {"task_id": task_id, "text": text}, ctx)
         return
+    client = get_client(ctx.obj.get("profile", "default"))
     try:
         if not project_id:
             task = client.v2.get_task(task_id)
@@ -544,10 +543,10 @@ def comment_add(ctx: click.Context, task_id: str, text: str, project_id: str | N
 @click.pass_context
 def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id: str | None) -> None:
     """Delete a comment from a task."""
-    client = get_client(ctx.obj.get("profile", "default"))
     if is_dry_run(ctx):
         output_dry_run("task.comment.delete", {"comment_id": comment_id}, ctx)
         return
+    client = get_client(ctx.obj.get("profile", "default"))
     try:
         if not project_id:
             task = client.v2.get_task(task_id)
@@ -585,10 +584,10 @@ def task_activity(ctx: click.Context, task_id: str) -> None:
 @click.pass_context
 def task_duplicate(ctx: click.Context, task_id: str) -> None:
     """Duplicate a task."""
-    client = get_client(ctx.obj.get("profile", "default"))
     if is_dry_run(ctx):
         output_dry_run("task.duplicate", {"task_id": task_id}, ctx)
         return
+    client = get_client(ctx.obj.get("profile", "default"))
     try:
         task = client.v2.get_task(task_id)
         new_task = dict(task)
