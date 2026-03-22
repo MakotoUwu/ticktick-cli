@@ -24,10 +24,20 @@ def _make_ctx(
     dry_run: bool = False,
     output_format: str = "json",
     quiet: bool = False,
+    offset: int = 0,
+    fetch_all: bool = False,
 ) -> click.Context:
     """Create a click Context with obj dict."""
     ctx = click.Context(click.Command("test"))
-    ctx.obj = {"human": human, "fields": fields, "dry_run": dry_run, "output_format": output_format, "quiet": quiet}
+    ctx.obj = {
+        "human": human,
+        "fields": fields,
+        "dry_run": dry_run,
+        "output_format": output_format,
+        "quiet": quiet,
+        "offset": offset,
+        "all": fetch_all,
+    }
     return ctx
 
 
@@ -57,6 +67,9 @@ class TestJsonOutput:
         assert data["ok"] is True
         assert data["count"] == 2
         assert len(data["data"]) == 2
+        assert data["total"] == 2
+        assert data["offset"] == 0
+        assert data["has_more"] is False
 
     def test_output_list_empty(self, capsys: pytest.CaptureFixture) -> None:
         ctx = _make_ctx(human=False)
@@ -66,6 +79,7 @@ class TestJsonOutput:
         assert data["ok"] is True
         assert data["count"] == 0
         assert data["data"] == []
+        assert data["has_more"] is False
 
     def test_output_item(self, capsys: pytest.CaptureFixture) -> None:
         ctx = _make_ctx(human=False)
@@ -326,3 +340,82 @@ class TestQuietOutput:
         output_item({"id": "y2", "title": "T"}, ctx)
         captured = capsys.readouterr()
         assert captured.out.strip() == "y2"
+
+
+class TestPagination:
+    def test_offset_skips_items(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(offset=2)
+        items = [{"id": str(i)} for i in range(5)]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["count"] == 3
+        assert data["total"] == 5
+        assert data["offset"] == 2
+        assert data["has_more"] is False
+        assert [d["id"] for d in data["data"]] == ["2", "3", "4"]
+
+    def test_offset_beyond_items(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(offset=10)
+        items = [{"id": "1"}, {"id": "2"}]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["count"] == 0
+        assert data["total"] == 2
+        assert data["has_more"] is False
+
+    def test_has_more_true_when_offset_leaves_remaining(self, capsys: pytest.CaptureFixture) -> None:
+        """When offset + returned count < total, has_more should be True.
+
+        Note: has_more is only meaningful when combined with command-level --limit.
+        Without --limit, offset just slices and returns the rest.
+        """
+        ctx = _make_ctx(offset=0)
+        items = [{"id": str(i)} for i in range(5)]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        # No limit applied, so all items returned, has_more is False
+        assert data["has_more"] is False
+        assert data["count"] == 5
+
+    def test_fetch_all_skips_pagination(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(fetch_all=True)
+        items = [{"id": str(i)} for i in range(5)]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["ok"] is True
+        assert data["count"] == 5
+        assert "total" not in data
+        assert "offset" not in data
+        assert "has_more" not in data
+
+    def test_fetch_all_ignores_offset(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(offset=3, fetch_all=True)
+        items = [{"id": str(i)} for i in range(5)]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["count"] == 5  # All items returned, offset ignored
+
+    def test_offset_with_quiet_mode(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True, offset=2)
+        items = [{"id": str(i)} for i in range(5)]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert lines == ["2", "3", "4"]
+
+    def test_pagination_metadata_with_pre_sliced_list(self, capsys: pytest.CaptureFixture) -> None:
+        """When command pre-slices with --limit, total reflects what was passed in."""
+        ctx = _make_ctx(offset=0)
+        # Simulate a command that already applied --limit 3 to 10 items
+        items = [{"id": str(i)} for i in range(3)]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["count"] == 3
+        assert data["total"] == 3
+        assert data["has_more"] is False

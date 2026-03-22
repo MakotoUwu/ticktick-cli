@@ -13,6 +13,7 @@ from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
     output_error,
+    output_existing_item,
     output_item,
     output_list,
     output_message,
@@ -92,6 +93,7 @@ def habit_show(ctx: click.Context, habit_id: str) -> None:
 @click.option("--section", type=click.Choice(["morning", "afternoon", "night"]), default=None)
 @click.option("--repeat", default="RRULE:FREQ=WEEKLY;BYDAY=SU,MO,TU,WE,TH,FR,SA")
 @click.option("--reminder", default=None, help="Reminder time (HH:MM)")
+@click.option("--if-not-exists", "if_not_exists", is_flag=True, help="Skip creation if a habit with the same name exists")
 @click.pass_context
 def habit_create(
     ctx: click.Context,
@@ -104,9 +106,21 @@ def habit_create(
     section: str | None,
     repeat: str,
     reminder: str | None,
+    if_not_exists: bool,
 ) -> None:
     """Create a new habit."""
     client = get_client(ctx.obj.get("profile", "default"))
+
+    if if_not_exists:
+        try:
+            habits = client.v2.get_habits()
+            for h in habits:
+                if h.get("name", "").lower() == name.lower():
+                    output_existing_item(_format_habit(h), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
 
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
     habit_id = uuid.uuid4().hex[:24]

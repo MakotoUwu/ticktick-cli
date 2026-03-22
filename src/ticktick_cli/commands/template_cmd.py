@@ -14,6 +14,7 @@ from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
     output_error,
+    output_existing_item,
     output_item,
     output_list,
     output_message,
@@ -66,6 +67,7 @@ def template_show(ctx: click.Context, template_id: str) -> None:
 @click.option("--content", "-c", default=None, help="Template body text")
 @click.option("--items", default=None, help="Checklist items (comma-separated)")
 @click.option("--tag", "-t", multiple=True, help="Tags (repeatable)")
+@click.option("--if-not-exists", "if_not_exists", is_flag=True, help="Skip creation if a template with the same title exists")
 @click.pass_context
 def template_create(
     ctx: click.Context,
@@ -73,8 +75,22 @@ def template_create(
     content: str | None,
     items: str | None,
     tag: tuple[str, ...],
+    if_not_exists: bool,
 ) -> None:
     """Create a new task template."""
+    if if_not_exists:
+        try:
+            client = get_client(ctx.obj.get("profile", "default"))
+            result = client.v2.get_templates()
+            raw = result.get("taskTemplates", []) if isinstance(result, dict) else []
+            for t in raw:
+                if t.get("title", "").lower() == title.lower():
+                    output_existing_item(TaskTemplate(**t).to_output(), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
+
     template_data: dict[str, Any] = {
         "id": _generate_object_id(),
         "createdTime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000"),

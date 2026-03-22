@@ -11,6 +11,7 @@ from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
     output_error,
+    output_existing_item,
     output_list,
     output_message,
 )
@@ -49,10 +50,24 @@ def tag_list(ctx: click.Context) -> None:
 @click.argument("label")
 @click.option("--color", default=None, help="Hex color")
 @click.option("--parent", default=None, help="Parent tag name for nesting")
+@click.option("--if-not-exists", "if_not_exists", is_flag=True, help="Skip creation if a tag with the same name exists")
 @click.pass_context
-def tag_create(ctx: click.Context, label: str, color: str | None, parent: str | None) -> None:
+def tag_create(ctx: click.Context, label: str, color: str | None, parent: str | None, if_not_exists: bool) -> None:
     """Create a tag."""
     client = get_client(ctx.obj.get("profile", "default"))
+
+    if if_not_exists:
+        try:
+            tags = client.get_all_tags()
+            tag_name = label.lower().replace(" ", "")
+            for t in tags:
+                if t.get("name", "").lower() == tag_name or t.get("label", "").lower() == label.lower():
+                    output_existing_item(_format_tag(t), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
+
     tag: dict[str, Any] = {"label": label, "name": label.lower().replace(" ", "")}
     if color:
         tag["color"] = color

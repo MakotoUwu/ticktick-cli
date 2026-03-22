@@ -191,6 +191,13 @@ def output_error(message: str, ctx: click.Context | None = None, *, exit_code: i
         print(json.dumps(result, indent=2), file=sys.stderr)
 
 
+def _get_pagination(ctx: click.Context | None) -> tuple[int, bool]:
+    """Extract --offset and --all from context."""
+    if ctx and ctx.obj:
+        return ctx.obj.get("offset", 0), ctx.obj.get("all", False)
+    return 0, False
+
+
 def output_list(
     items: list[dict[str, Any]],
     columns: list[str] | None = None,
@@ -198,6 +205,13 @@ def output_list(
     ctx: click.Context | None = None,
 ) -> None:
     """Output a list of items as JSON array or rich table."""
+    # Compute pagination before any slicing
+    total = len(items)
+    offset, fetch_all = _get_pagination(ctx)
+
+    if not fetch_all:
+        items = items[offset:]  # apply offset first
+
     if _is_quiet(ctx):
         for item in items:
             if isinstance(item, dict):
@@ -220,7 +234,19 @@ def output_list(
     elif fmt == "yaml":
         print(_to_yaml(items), end="")
     else:
-        result = {"ok": True, "data": items, "count": len(items)}
+        if fetch_all:
+            result: dict[str, Any] = {"ok": True, "data": items, "count": len(items)}
+        else:
+            count = len(items)
+            has_more = offset + count < total
+            result = {
+                "ok": True,
+                "data": items,
+                "count": count,
+                "total": total,
+                "offset": offset,
+                "has_more": has_more,
+            }
         print(json.dumps(result, indent=2, default=_serialize))
 
 
@@ -245,6 +271,33 @@ def output_item(
         print(_to_yaml(item), end="")
     else:
         result = {"ok": True, "data": item}
+        print(json.dumps(result, indent=2, default=_serialize))
+
+
+def output_existing_item(
+    item: dict[str, Any],
+    ctx: click.Context | None = None,
+) -> None:
+    """Output an existing item for --if-not-exists (already_exists=true)."""
+    if _is_quiet(ctx):
+        print(_extract_id(item))
+        return
+
+    human = ctx.obj.get("human", False) if ctx and ctx.obj else False
+    fmt = _get_output_format(ctx)
+    item = _apply_fields_filter(item, _get_fields(ctx))
+
+    if human:
+        from rich.console import Console
+
+        Console().print("[yellow]Already exists:[/yellow]")
+        _print_detail(item)
+    elif fmt == "csv":
+        print(_to_csv([item]), end="")
+    elif fmt == "yaml":
+        print(_to_yaml(item), end="")
+    else:
+        result = {"ok": True, "data": item, "already_exists": True}
         print(json.dumps(result, indent=2, default=_serialize))
 
 

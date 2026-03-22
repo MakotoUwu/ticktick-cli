@@ -15,6 +15,7 @@ from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
     output_error,
+    output_existing_item,
     output_item,
     output_list,
     output_message,
@@ -65,6 +66,7 @@ def task_group() -> None:
 @click.option("--all-day", is_flag=True, help="Mark as all-day task")
 @click.option("--repeat", default=None, help="Recurrence RRULE (e.g., RRULE:FREQ=DAILY)")
 @click.option("--reminder", multiple=True, help="Reminder triggers")
+@click.option("--if-not-exists", "if_not_exists", is_flag=True, help="Skip creation if a task with the same title exists in the project")
 @click.pass_context
 def task_add(
     ctx: click.Context,
@@ -78,9 +80,26 @@ def task_add(
     all_day: bool,
     repeat: str | None,
     reminder: tuple[str, ...],
+    if_not_exists: bool,
 ) -> None:
     """Create a new task."""
     client = get_client(ctx.obj.get("profile", "default"))
+
+    if if_not_exists:
+        try:
+            tasks = client.get_all_tasks()
+            project_id = _resolve_project_id(client, project) if project else None
+            for t in tasks:
+                if (
+                    t.get("title", "").lower() == title.lower()
+                    and t.get("status", 0) < 2
+                    and (project_id is None or t.get("projectId") == project_id)
+                ):
+                    output_existing_item(_format_task(t), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
 
     task_data: dict[str, Any] = {"title": title}
     if project:

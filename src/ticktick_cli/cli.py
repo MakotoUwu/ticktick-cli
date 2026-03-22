@@ -31,14 +31,16 @@ from ticktick_cli.output import output_error, output_item
 @click.group()
 @click.option("--human", is_flag=True, help="Human-readable rich table output instead of JSON.")
 @click.option("--verbose", is_flag=True, help="Enable verbose/debug output.")
-@click.option("--profile", default="default", help="Auth profile to use.")
-@click.option("--fields", default=None, help="Comma-separated list of fields to include in output (e.g., id,title,priority).")
+@click.option("--profile", default="default", envvar="TICKTICK_PROFILE", help="Auth profile to use.")
+@click.option("--fields", default=None, envvar="TICKTICK_FIELDS", help="Comma-separated list of fields to include in output (e.g., id,title,priority).")
 @click.option("--dry-run", is_flag=True, help="Show what would be done without executing.")
-@click.option("--output", "-o", "output_format", type=click.Choice(["json", "csv", "yaml"]), default="json", help="Output format (default: json).")
-@click.option("--quiet", "-q", is_flag=True, help="Quiet mode — output only bare IDs, one per line. Useful for piping.")
+@click.option("--output", "-o", "output_format", type=click.Choice(["json", "csv", "yaml"]), default="json", envvar="TICKTICK_OUTPUT", help="Output format (default: json).")
+@click.option("--quiet", "-q", is_flag=True, envvar="TICKTICK_QUIET", help="Quiet mode — output only bare IDs, one per line. Useful for piping.")
+@click.option("--offset", type=int, default=0, help="Skip first N items in list output (pagination).")
+@click.option("--all", "fetch_all", is_flag=True, help="Return all items, ignoring --limit.")
 @click.version_option(version=__version__, prog_name="ticktick-cli")
 @click.pass_context
-def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: str | None, dry_run: bool, output_format: str, quiet: bool) -> None:
+def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: str | None, dry_run: bool, output_format: str, quiet: bool, offset: int, fetch_all: bool) -> None:
     """TickTick CLI — agent-native command-line interface for TickTick.
 
     Auto-detects TTY: rich tables in terminal, JSON when piped.
@@ -73,6 +75,8 @@ def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: st
     ctx.obj["dry_run"] = dry_run
     ctx.obj["output_format"] = output_format
     ctx.obj["quiet"] = quiet
+    ctx.obj["offset"] = offset
+    ctx.obj["all"] = fetch_all
 
 
 # ── Register all command groups ──────────────────────────

@@ -164,7 +164,7 @@ ticktick config path
 All global flags go **before** the command:
 
 ```bash
-ticktick [--human] [--quiet] [--output json|csv|yaml] [--fields FIELDS] [--dry-run] [--verbose] [--profile NAME] COMMAND
+ticktick [--human] [--quiet] [--output json|csv|yaml] [--fields FIELDS] [--dry-run] [--verbose] [--profile NAME] [--offset N] [--all] COMMAND
 ```
 
 | Flag | Description |
@@ -176,6 +176,33 @@ ticktick [--human] [--quiet] [--output json|csv|yaml] [--fields FIELDS] [--dry-r
 | `--dry-run` | Preview actions without making API calls |
 | `--verbose` | Debug output |
 | `--profile NAME` | Auth profile (default: `default`) |
+| `--offset N` | Skip first N items in list output (client-side pagination) |
+| `--all` | Return all items, ignoring `--limit`. No pagination metadata in output. |
+
+### Pagination
+
+List commands support client-side pagination. JSON output includes pagination metadata:
+
+```json
+{"ok": true, "data": [...], "count": 10, "total": 42, "offset": 0, "has_more": true}
+```
+
+- `--offset N` skips the first N items before returning results
+- Command-level `--limit` caps how many items are returned after the offset
+- `--all` returns everything with no pagination metadata (just `count`)
+
+### Environment Variables
+
+Global options can be set via environment variables as defaults:
+
+| Variable | Overrides | Example |
+|----------|-----------|---------|
+| `TICKTICK_OUTPUT` | `--output` | `export TICKTICK_OUTPUT=yaml` |
+| `TICKTICK_PROFILE` | `--profile` | `export TICKTICK_PROFILE=work` |
+| `TICKTICK_FIELDS` | `--fields` | `export TICKTICK_FIELDS=id,title,priority` |
+| `TICKTICK_QUIET` | `--quiet` | `export TICKTICK_QUIET=1` |
+
+Command-line flags always take precedence over environment variables.
 
 ### Quiet mode examples
 
@@ -205,14 +232,37 @@ Explicit flags always take precedence over auto-detection:
 
 This means agents piping output always get structured JSON, while interactive users see human-readable tables without needing `--human`.
 
+## Idempotent Creates (`--if-not-exists`)
+
+All create/add commands support `--if-not-exists` for safe retries. When set, the CLI checks if a resource with the same name/title already exists before creating. If found, it returns the existing resource with exit code 0 instead of creating a duplicate.
+
+Supported commands:
+- `ticktick task add "TITLE" --if-not-exists` — matches by title (and project if `--project` given)
+- `ticktick project create "NAME" --if-not-exists` — matches by project name
+- `ticktick tag create "NAME" --if-not-exists` — matches by tag name/label
+- `ticktick filter create "NAME" --if-not-exists` — matches by filter name
+- `ticktick template create "TITLE" --if-not-exists` — matches by template title
+- `ticktick habit create "NAME" --if-not-exists` — matches by habit name
+
+JSON response when resource already exists:
+
+```json
+{"ok": true, "data": {...}, "already_exists": true}
+```
+
+This enables idempotent operations — agents can safely retry create commands without duplicating resources.
+
 ## Output Contract
 
 All commands return:
 
 ```
-Success:  {"ok": true, "data": [...], "count": N}
-Message:  {"ok": true, "message": "Task created."}
-Error:    {"ok": false, "error": "description"}
+Success (list):  {"ok": true, "data": [...], "count": N, "total": T, "offset": O, "has_more": bool}
+Success (--all): {"ok": true, "data": [...], "count": N}
+Success (item):  {"ok": true, "data": {...}}
+Existing:        {"ok": true, "data": {...}, "already_exists": true}
+Message:         {"ok": true, "message": "Task created."}
+Error:           {"ok": false, "error": "description"}
 ```
 
 Exit codes:

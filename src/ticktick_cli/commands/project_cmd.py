@@ -11,6 +11,7 @@ from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
     output_error,
+    output_existing_item,
     output_item,
     output_list,
     output_message,
@@ -57,12 +58,25 @@ def project_list(ctx: click.Context, include_archived: bool) -> None:
 @click.option("--kind", type=click.Choice(["TASK", "NOTE"]), default="TASK")
 @click.option("--view", type=click.Choice(["list", "kanban", "timeline"]), default="list")
 @click.option("--folder", default=None, help="Parent folder ID")
+@click.option("--if-not-exists", "if_not_exists", is_flag=True, help="Skip creation if a project with the same name exists")
 @click.pass_context
 def project_create(
-    ctx: click.Context, name: str, color: str | None, kind: str, view: str, folder: str | None
+    ctx: click.Context, name: str, color: str | None, kind: str, view: str, folder: str | None, if_not_exists: bool
 ) -> None:
     """Create a new project."""
     client = get_client(ctx.obj.get("profile", "default"))
+
+    if if_not_exists:
+        try:
+            projects = client.list_projects()
+            for p in projects:
+                if p.get("name", "").lower() == name.lower():
+                    output_existing_item(_format_project(p), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
+
     data: dict[str, Any] = {"name": name, "kind": kind, "viewMode": view}
     if color:
         data["color"] = color

@@ -14,6 +14,7 @@ from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
     output_error,
+    output_existing_item,
     output_item,
     output_list,
     output_message,
@@ -117,6 +118,7 @@ def filter_show(ctx: click.Context, filter_id: str) -> None:
     help="Date filter",
 )
 @click.option("--tag", "-t", multiple=True, help="Tag filter (repeatable)")
+@click.option("--if-not-exists", "if_not_exists", is_flag=True, help="Skip creation if a filter with the same name exists")
 @click.pass_context
 def filter_create(
     ctx: click.Context,
@@ -124,8 +126,22 @@ def filter_create(
     priority: tuple[str, ...],
     date: str | None,
     tag: tuple[str, ...],
+    if_not_exists: bool,
 ) -> None:
     """Create a new saved filter."""
+    if if_not_exists:
+        try:
+            client = get_client(ctx.obj.get("profile", "default"))
+            state = client.v2.sync()
+            raw_filters = state.get("filters") or []
+            for f in raw_filters:
+                if f.get("name", "").lower() == name.lower():
+                    output_existing_item(Filter(**f).to_output(), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
+
     rule = _build_rule(
         priorities=list(priority) if priority else None,
         date=date,

@@ -145,3 +145,25 @@ def test_auth_subcommands(runner: CliRunner) -> None:
     expected = ["login", "login-v2", "logout", "status"]
     for cmd in expected:
         assert cmd in result.output
+
+
+def test_global_offset_and_all_flags(runner: CliRunner) -> None:
+    """--offset and --all appear in help."""
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "--offset" in result.output
+    assert "--all" in result.output
+
+
+def test_env_var_output(runner: CliRunner) -> None:
+    """TICKTICK_OUTPUT sets default output format."""
+    result = runner.invoke(cli, ["version"], env={"TICKTICK_OUTPUT": "json"})
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["ok"] is True
+
+
+def test_env_var_profile(runner: CliRunner) -> None:
+    """TICKTICK_PROFILE is accepted as env var."""
+    result = runner.invoke(cli, ["--help"], env={"TICKTICK_PROFILE": "work"})
+    assert result.exit_code == 0
