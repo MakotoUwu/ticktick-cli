@@ -16,3 +16,5 @@ env/
 *.so
 .coverage
 htmlcov/
+.codex-playwright/
+output/playwright/
