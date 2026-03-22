@@ -424,7 +424,9 @@ This is an **unofficial, community-built** CLI. TickTick released their own [`@t
 
 ### Next
 
-- [ ] Publish to PyPI
+- [ ] Publish package to PyPI
+- [ ] Package and submit a Claude Code plugin directory entry
+- [ ] Publish native skill distribution for OpenClaw / ClawHub
 - [ ] Homebrew formula
 - [ ] Advanced productivity reports
 - [ ] Focus session ↔ task linking
