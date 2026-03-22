@@ -11,6 +11,7 @@ import httpx
 from ticktick_cli.exceptions import (
     APIError,
     AuthenticationError,
+    ConflictError,
     NotFoundError,
     RateLimitError,
 )
@@ -91,6 +92,13 @@ class BaseClient:
             raise RateLimitError("API rate limit exceeded (429). Try again later.")
         if response.status_code == 404:
             raise NotFoundError(f"Resource not found: {path}", status_code=404)
+        if response.status_code == 409:
+            body = response.text[:200] if response.text else ""
+            raise ConflictError(
+                f"Conflict (409): {body}",
+                status_code=409,
+                response_body=body,
+            )
         if response.status_code >= 400:
             body = response.text[:200] if response.text else ""
             raise APIError(

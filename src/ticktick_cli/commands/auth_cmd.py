@@ -38,7 +38,7 @@ def auth_login(ctx: click.Context, client_id: str, client_secret: str, redirect_
         output_message("V1 OAuth login successful.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(2) from None
+        raise SystemExit(3) from None
 
 
 @auth_group.command("login-v2")
@@ -66,7 +66,7 @@ def auth_login_v2(ctx: click.Context, username: str, password: str) -> None:
         output_message("V2 session login successful.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
-        raise SystemExit(2) from None
+        raise SystemExit(3) from None
 
 
 @auth_group.command("logout")

@@ -23,10 +23,11 @@ def _make_ctx(
     fields: list[str] | None = None,
     dry_run: bool = False,
     output_format: str = "json",
+    quiet: bool = False,
 ) -> click.Context:
     """Create a click Context with obj dict."""
     ctx = click.Context(click.Command("test"))
-    ctx.obj = {"human": human, "fields": fields, "dry_run": dry_run, "output_format": output_format}
+    ctx.obj = {"human": human, "fields": fields, "dry_run": dry_run, "output_format": output_format, "quiet": quiet}
     return ctx
 
 
@@ -256,3 +257,72 @@ class TestYamlOutput:
         output_success({"key": "value"}, ctx)
         captured = capsys.readouterr()
         assert "key: value" in captured.out
+
+
+class TestQuietOutput:
+    def test_output_list_quiet_prints_ids(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        items = [{"id": "abc123", "title": "First"}, {"id": "def456", "title": "Second"}]
+        output_list(items, columns=["id", "title"], ctx=ctx)
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert lines == ["abc123", "def456"]
+
+    def test_output_list_quiet_empty(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_list([], ctx=ctx)
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_output_item_quiet_prints_id(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_item({"id": "task1", "title": "Test"}, ctx)
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "task1"
+
+    def test_output_item_quiet_fallback_first_field(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_item({"name": "myname", "extra": "data"}, ctx)
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "myname"
+
+    def test_output_message_quiet_silent(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_message("Task completed", ctx)
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_output_success_quiet_single_item(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_success({"id": "new123", "title": "Created"}, ctx)
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "new123"
+
+    def test_output_success_quiet_list(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_success([{"id": "a1"}, {"id": "b2"}], ctx)
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert lines == ["a1", "b2"]
+
+    def test_output_error_still_goes_to_stderr(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_error("something failed", ctx)
+        captured = capsys.readouterr()
+        assert captured.out == ""  # Nothing on stdout
+        data = json.loads(captured.err)
+        assert data["ok"] is False
+        assert data["error"] == "something failed"
+
+    def test_quiet_overrides_human(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True, human=True)
+        items = [{"id": "x1", "title": "T"}]
+        output_list(items, ctx=ctx)
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "x1"
+
+    def test_quiet_overrides_csv_format(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True, output_format="csv")
+        output_item({"id": "y2", "title": "T"}, ctx)
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "y2"

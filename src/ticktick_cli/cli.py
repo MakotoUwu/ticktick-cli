@@ -35,20 +35,44 @@ from ticktick_cli.output import output_error, output_item
 @click.option("--fields", default=None, help="Comma-separated list of fields to include in output (e.g., id,title,priority).")
 @click.option("--dry-run", is_flag=True, help="Show what would be done without executing.")
 @click.option("--output", "-o", "output_format", type=click.Choice(["json", "csv", "yaml"]), default="json", help="Output format (default: json).")
+@click.option("--quiet", "-q", is_flag=True, help="Quiet mode — output only bare IDs, one per line. Useful for piping.")
 @click.version_option(version=__version__, prog_name="ticktick-cli")
 @click.pass_context
-def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: str | None, dry_run: bool, output_format: str) -> None:
+def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: str | None, dry_run: bool, output_format: str, quiet: bool) -> None:
     """TickTick CLI — agent-native command-line interface for TickTick.
 
-    JSON output by default. Use --human for rich tables, --output csv/yaml for other formats.
+    Auto-detects TTY: rich tables in terminal, JSON when piped.
+    Use --human to force tables, --output json/csv/yaml to force a format.
     """
     ctx.ensure_object(dict)
-    ctx.obj["human"] = human
+
+    # TTY auto-detection: use Rich table output when stdout is a terminal,
+    # unless the user explicitly requested a specific output format.
+    output_source = ctx.get_parameter_source("output_format")
+    human_source = ctx.get_parameter_source("human")
+    explicit_output = output_source == click.core.ParameterSource.COMMANDLINE
+    explicit_human = human_source == click.core.ParameterSource.COMMANDLINE
+
+    if explicit_human:
+        # --human flag explicitly passed — respect it
+        resolved_human = human
+    elif explicit_output:
+        # --output explicitly set — respect it, no auto-human
+        resolved_human = False
+    elif sys.stdout.isatty():
+        # TTY detected and no explicit flags — auto-enable human mode
+        resolved_human = True
+    else:
+        # Piped / non-TTY — keep JSON default
+        resolved_human = False
+
+    ctx.obj["human"] = resolved_human
     ctx.obj["verbose"] = verbose
     ctx.obj["profile"] = profile
     ctx.obj["fields"] = [f.strip() for f in fields.split(",")] if fields else None
     ctx.obj["dry_run"] = dry_run
     ctx.obj["output_format"] = output_format
+    ctx.obj["quiet"] = quiet
 
 
 # ── Register all command groups ──────────────────────────
@@ -135,14 +159,20 @@ def version_command(ctx: click.Context) -> None:
 
 def main() -> None:
     """Entry point."""
+    from ticktick_cli.exceptions import TickTickCLIError
+
     try:
         cli(standalone_mode=False)
     except SystemExit as e:
         sys.exit(e.code)
     except click.exceptions.Abort:
         sys.exit(130)
+    except TickTickCLIError as e:
+        payload: dict[str, object] = {"ok": False, "error": str(e), "exit_code": e.exit_code}
+        click.echo(json.dumps(payload), err=True)
+        sys.exit(e.exit_code)
     except Exception as e:
-        click.echo(json.dumps({"ok": False, "error": str(e)}), err=True)
+        click.echo(json.dumps({"ok": False, "error": str(e), "exit_code": 1}), err=True)
         sys.exit(1)
 
 

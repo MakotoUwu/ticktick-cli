@@ -164,17 +164,46 @@ ticktick config path
 All global flags go **before** the command:
 
 ```bash
-ticktick [--human] [--output json|csv|yaml] [--fields FIELDS] [--dry-run] [--verbose] [--profile NAME] COMMAND
+ticktick [--human] [--quiet] [--output json|csv|yaml] [--fields FIELDS] [--dry-run] [--verbose] [--profile NAME] COMMAND
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--human` | Rich table output instead of JSON |
+| `--quiet`, `-q` | Bare output — only IDs, one per line. Messages are suppressed. Errors still go to stderr. Takes precedence over `--human` and `--output`. |
 | `--output FORMAT` | `json` (default), `csv`, `yaml` |
 | `--fields FIELDS` | Comma-separated field list: `--fields id,title,priority` |
 | `--dry-run` | Preview actions without making API calls |
 | `--verbose` | Debug output |
 | `--profile NAME` | Auth profile (default: `default`) |
+
+### Quiet mode examples
+
+```bash
+ticktick task list -q              # Just task IDs, one per line
+ticktick task list -q | wc -l      # Count tasks
+ticktick task list -q | xargs -I{} ticktick task done {}  # Complete all tasks
+ticktick task add "Buy milk" -q    # Just the new task ID
+```
+
+## TTY Auto-Detection
+
+The CLI automatically detects whether stdout is a terminal (TTY) and adjusts output format:
+
+- **Terminal (TTY):** Rich table output is used automatically (equivalent to `--human`).
+- **Piped / non-TTY:** JSON output is used (agent-friendly default).
+
+Explicit flags always take precedence over auto-detection:
+
+| Scenario | Result |
+|----------|--------|
+| `ticktick task list` (in terminal) | Rich table |
+| `ticktick task list \| jq .` | JSON |
+| `ticktick --human task list` | Rich table (explicit) |
+| `ticktick --output json task list` (in terminal) | JSON (explicit) |
+| `ticktick --output csv task list` | CSV (explicit) |
+
+This means agents piping output always get structured JSON, while interactive users see human-readable tables without needing `--human`.
 
 ## Output Contract
 
@@ -186,7 +215,17 @@ Message:  {"ok": true, "message": "Task created."}
 Error:    {"ok": false, "error": "description"}
 ```
 
-Exit codes: `0` success, `1` error, `2` auth error.
+Exit codes:
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | General error |
+| `2` | Usage / input error |
+| `3` | Authentication failure |
+| `4` | Resource not found |
+| `5` | Rate limited (transient, safe to retry) |
+| `6` | Conflict / resource already exists |
 
 ## Natural Language Dates
 

@@ -52,6 +52,21 @@ def _get_output_format(ctx: click.Context | None) -> str:
     return "json"
 
 
+def _is_quiet(ctx: click.Context | None) -> bool:
+    """Check if --quiet flag is active."""
+    return bool(ctx and ctx.obj and ctx.obj.get("quiet"))
+
+
+def _extract_id(item: dict[str, Any]) -> str:
+    """Extract the ID (or first field) from an item dict."""
+    if "id" in item:
+        return str(item["id"])
+    # Fall back to the first value in the dict
+    if item:
+        return str(next(iter(item.values())))
+    return ""
+
+
 def _to_csv(items: list[dict[str, Any]]) -> str:
     """Convert list of dicts to CSV string."""
     if not items:
@@ -127,6 +142,18 @@ def _yaml_scalar(v: Any) -> str:
 
 def output_success(data: Any, ctx: click.Context | None = None) -> None:
     """Output successful result."""
+    if _is_quiet(ctx):
+        # In quiet mode, print only IDs
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    print(_extract_id(item))
+                else:
+                    print(str(item))
+        elif isinstance(data, dict):
+            print(_extract_id(data))
+        return
+
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
     fmt = _get_output_format(ctx)
     data = _apply_fields_filter(data, _get_fields(ctx))
@@ -143,8 +170,15 @@ def output_success(data: Any, ctx: click.Context | None = None) -> None:
         print(json.dumps(result, indent=2, default=_serialize))
 
 
-def output_error(message: str, ctx: click.Context | None = None) -> None:
-    """Output error result."""
+def output_error(message: str, ctx: click.Context | None = None, *, exit_code: int = 1) -> None:
+    """Output error result.
+
+    Parameters
+    ----------
+    message:   Human-readable error description.
+    ctx:       Click context (controls --human flag).
+    exit_code: Semantic exit code included in the JSON envelope.
+    """
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
 
     if human:
@@ -153,7 +187,7 @@ def output_error(message: str, ctx: click.Context | None = None) -> None:
         console = Console(stderr=True)
         console.print(f"[bold red]Error:[/bold red] {message}")
     else:
-        result = {"ok": False, "error": message}
+        result: dict[str, object] = {"ok": False, "error": message, "exit_code": exit_code}
         print(json.dumps(result, indent=2), file=sys.stderr)
 
 
@@ -164,6 +198,14 @@ def output_list(
     ctx: click.Context | None = None,
 ) -> None:
     """Output a list of items as JSON array or rich table."""
+    if _is_quiet(ctx):
+        for item in items:
+            if isinstance(item, dict):
+                print(_extract_id(item))
+            else:
+                print(str(item))
+        return
+
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
     fmt = _get_output_format(ctx)
     fields = _get_fields(ctx)
@@ -187,6 +229,10 @@ def output_item(
     ctx: click.Context | None = None,
 ) -> None:
     """Output a single item."""
+    if _is_quiet(ctx):
+        print(_extract_id(item))
+        return
+
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
     fmt = _get_output_format(ctx)
     item = _apply_fields_filter(item, _get_fields(ctx))
@@ -204,6 +250,9 @@ def output_item(
 
 def output_message(message: str, ctx: click.Context | None = None) -> None:
     """Output a simple message (e.g., 'Task completed')."""
+    if _is_quiet(ctx):
+        return  # Silent success in quiet mode
+
     human = ctx.obj.get("human", False) if ctx and ctx.obj else False
 
     if human:

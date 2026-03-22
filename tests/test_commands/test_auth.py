@@ -117,7 +117,7 @@ class TestAuthLogin:
         data = json.loads(result.output)
         assert "successful" in data["message"].lower()
 
-    def test_login_failure_exits_2(self, runner: CliRunner, temp_auth_env: Path) -> None:
+    def test_login_failure_exits_3(self, runner: CliRunner, temp_auth_env: Path) -> None:
         with patch(
             "ticktick_cli.auth.oauth2_login",
             side_effect=AuthenticationError("OAuth callback timed out"),
@@ -127,7 +127,7 @@ class TestAuthLogin:
                 "--client-id", "bad",
                 "--client-secret", "bad",
             ])
-        assert result.exit_code == 2
+        assert result.exit_code == 3
 
     def test_login_missing_client_id_fails(self, runner: CliRunner, temp_auth_env: Path) -> None:
         result = runner.invoke(cli, ["auth", "login", "--client-secret", "x"])
@@ -150,7 +150,7 @@ class TestAuthLoginV2:
         data = json.loads(result.output)
         assert "successful" in data["message"].lower()
 
-    def test_login_v2_bad_credentials_exits_2(self, runner: CliRunner, temp_auth_env: Path) -> None:
+    def test_login_v2_bad_credentials_exits_3(self, runner: CliRunner, temp_auth_env: Path) -> None:
         with patch(
             "ticktick_cli.auth.v2_login",
             side_effect=AuthenticationError("Invalid credentials"),
@@ -160,7 +160,7 @@ class TestAuthLoginV2:
                 "--username", "bad@x.com",
                 "--password", "wrong",
             ])
-        assert result.exit_code == 2
+        assert result.exit_code == 3
 
     def test_login_v2_missing_password_fails(self, runner: CliRunner, temp_auth_env: Path) -> None:
         result = runner.invoke(cli, ["auth", "login-v2", "--username", "user"])
