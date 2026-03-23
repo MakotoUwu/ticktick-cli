@@ -80,10 +80,7 @@ async function withContext({ headed }, callback) {
   });
 
   try {
-    let page = context.pages()[0];
-    if (!page) {
-      page = await context.newPage();
-    }
+    const page = await context.newPage();
     return await callback(page);
   } finally {
     await context.close();
@@ -131,6 +128,34 @@ async function settlePage(page, settleMs = 2500) {
   await page.waitForTimeout(settleMs);
 }
 
+function extractTimerCandidates(lines) {
+  return lines.filter((value) => /^\d{1,2}:\d{2}$/.test(value));
+}
+
+function inferFocusTaskTitle(lines, timerText) {
+  if (!timerText) {
+    return "";
+  }
+
+  const timerIndex = lines.findIndex((value) => value === timerText);
+  if (timerIndex <= 0) {
+    return "";
+  }
+
+  for (let index = timerIndex - 1; index >= 0; index -= 1) {
+    const candidate = lines[index];
+    if (!candidate) {
+      continue;
+    }
+    if (candidate === "Pomodoro" || candidate === "New") {
+      continue;
+    }
+    return candidate;
+  }
+
+  return "";
+}
+
 async function runSnapshot(args) {
   const url = args.get("url");
   if (!url) {
@@ -174,11 +199,16 @@ async function runFocusSummary(args) {
     await settlePage(page);
 
     const capture = await capturePage(page, String(args.get("label") || "focus-summary"));
-    const timerMatch = capture.bodyTextExcerpt.match(/\b\d{2}:\d{2}\b/);
+    const timerCandidates = extractTimerCandidates(capture.textLines);
+    const timerText = timerCandidates[0] || "";
+    const taskTitle = inferFocusTaskTitle(capture.textLines, timerText);
 
     return {
       ...capture,
-      timerText: timerMatch ? timerMatch[0] : "",
+      timerText,
+      timerCandidates,
+      taskTitle,
+      isRunning: capture.buttons.includes("Pause"),
     };
   });
 }
