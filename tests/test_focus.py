@@ -234,6 +234,36 @@ class TestFocusStart:
         data = json.loads(result.output)
         assert data["data"]["duration"] == 45
 
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_start_with_task(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"exited": True}},
+            {
+                "point": 200,
+                "current": {
+                    "id": "sess123",
+                    "startTime": "2026-03-12T14:00:00.000+0000",
+                    "endTime": "2026-03-12T14:25:00.000+0000",
+                    "duration": 25,
+                },
+            },
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(
+            focus_group, ["start", "--task", "task123"], obj=_make_ctx()
+        )
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["data"]["taskId"] == "task123"
+
+        start_call = client.v2.focus_op.call_args_list[1]
+        assert start_call.kwargs["operations"][0]["focusOnId"] == "task123"
+
 
 class TestFocusStop:
     @patch("ticktick_cli.commands.focus_cmd.get_client")
@@ -357,6 +387,63 @@ class TestFocusStatus:
         data = json.loads(result.output)
         assert data["data"]["status"] == "running"
         assert data["data"]["duration"] == 25
+
+
+class TestFocusLink:
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_link_requires_active_session(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+
+        client.v2.focus_op.return_value = {
+            "point": 100,
+            "current": {"exited": True},
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(focus_group, ["link", "task123"], obj=_make_ctx())
+        assert result.exit_code == 1
+
+        payload = json.loads(result.output)
+        assert payload["ok"] is False
+        assert "No active focus session" in payload["error"]
+
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_link_fails_fast_for_running_session(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+
+        client.v2.focus_op.return_value = {
+            "point": 100,
+            "current": {
+                "id": "sess1",
+                "firstId": "sess1",
+                "exited": False,
+                "status": 0,
+                "duration": 25,
+                "startTime": "2026-03-12T14:00:00.000+0000",
+                "endTime": "2026-03-12T14:25:00.000+0000",
+                "pomoCount": 1,
+            },
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(focus_group, ["link", "task123"], obj=_make_ctx())
+        assert result.exit_code == 1
+        assert client.v2.focus_op.call_count == 1
+
+        payload = json.loads(result.output)
+        assert payload["ok"] is False
+        assert "not supported reliably yet" in payload["error"]
+
+    def test_link_dry_run(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            focus_group, ["link", "task123"], obj=_make_ctx(dry_run=True)
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
 
 
 class TestFocusLog:

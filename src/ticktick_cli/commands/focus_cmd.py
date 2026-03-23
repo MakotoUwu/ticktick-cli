@@ -61,11 +61,12 @@ def focus_group() -> None:
 @focus_group.command("start")
 @click.option("--duration", "-d", type=int, default=25, help="Duration in minutes (default: 25).")
 @click.option("--note", "-n", default="", help="Focus note.")
+@click.option("--task", "-t", default="", help="Task ID to link this focus session to.")
 @click.pass_context
-def focus_start(ctx: click.Context, duration: int, note: str) -> None:
+def focus_start(ctx: click.Context, duration: int, note: str, task: str) -> None:
     """Start a pomodoro focus timer."""
     if is_dry_run(ctx):
-        output_dry_run("focus start", {"duration": duration, "note": note}, ctx)
+        output_dry_run("focus start", {"duration": duration, "note": note, "task": task}, ctx)
         return
 
     client = get_client(ctx.obj.get("profile", "default"))
@@ -93,7 +94,7 @@ def focus_start(ctx: click.Context, duration: int, note: str) -> None:
             "op": "start",
             "duration": duration,
             "firstFocusId": session_id,
-            "focusOnId": "",
+            "focusOnId": task,
             "autoPomoLeft": 5,
             "pomoCount": 1,
             "manual": True,
@@ -110,6 +111,7 @@ def focus_start(ctx: click.Context, duration: int, note: str) -> None:
                 "duration": duration,
                 "startTime": current.get("startTime", _fmt_utc(now)),
                 "endTime": current.get("endTime", ""),
+                "taskId": task or None,
                 "note": note,
             },
             ctx,
@@ -278,6 +280,43 @@ def focus_status(ctx: click.Context) -> None:
             },
             ctx,
         )
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+# ── link ─────────────────────────────────────────────────────
+
+
+@focus_group.command("link")
+@click.argument("task_id")
+@click.pass_context
+def focus_link(ctx: click.Context, task_id: str) -> None:
+    """Link (or change) the task attached to the currently running focus session."""
+    if is_dry_run(ctx):
+        output_dry_run("focus link", {"task_id": task_id}, ctx)
+        return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        # 1. Get current state
+        state = client.v2.focus_op(last_point=0, operations=[])
+        current = state.get("current", {})
+
+        if not current or current.get("exited", True):
+            output_error("No active focus session. Start one first with `focus start`.", ctx)
+            raise SystemExit(1)
+        # Observed web behavior preserves a single session and appends task segments.
+        # Until the CLI can reproduce that operation sequence safely, fail fast instead
+        # of silently restarting the pomodoro under a new session ID.
+        output_error(
+            "Linking a running focus session is not supported reliably yet. "
+            "Use `focus stop --no-save` and `focus start --task TASK_ID` instead.",
+            ctx,
+        )
+        raise SystemExit(1)
+    except SystemExit:
+        raise
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
