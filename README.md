@@ -428,6 +428,7 @@ This is an **unofficial, community-built** CLI. TickTick released their own [`@t
 - [ ] Package and submit a Claude Code plugin directory entry
 - [ ] Publish native skill distribution for OpenClaw / ClawHub
 - [ ] Homebrew formula
+- [ ] Read-only calendar discovery commands (`calendar account list`, `calendar subscription list`, `calendar event list`)
 - [ ] Advanced productivity reports
 - [ ] Focus session ↔ task linking
 
