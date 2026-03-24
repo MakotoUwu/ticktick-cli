@@ -53,7 +53,10 @@ def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: st
     # unless the user explicitly requested a specific output format.
     output_source = ctx.get_parameter_source("output_format")
     human_source = ctx.get_parameter_source("human")
-    explicit_output = output_source == click.core.ParameterSource.COMMANDLINE
+    explicit_output = output_source in (
+        click.core.ParameterSource.COMMANDLINE,
+        click.core.ParameterSource.ENVIRONMENT,
+    )
     explicit_human = human_source == click.core.ParameterSource.COMMANDLINE
 
     if explicit_human:

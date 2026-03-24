@@ -282,8 +282,6 @@ def calendar_event_list(
         if calendar_id:
             events = [event for event in events if event.get("calendarId") == calendar_id]
         events.sort(key=_event_sort_key)
-        if not ctx.obj.get("all"):
-            events = events[:limit]
         output_list(
             events,
             columns=[
@@ -299,6 +297,7 @@ def calendar_event_list(
             ],
             title="Calendar Events",
             ctx=ctx,
+            limit=limit,
         )
     except Exception as e:
         output_error(str(e), ctx)

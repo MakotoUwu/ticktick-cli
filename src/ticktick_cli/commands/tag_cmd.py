@@ -54,6 +54,15 @@ def tag_list(ctx: click.Context) -> None:
 @click.pass_context
 def tag_create(ctx: click.Context, label: str, color: str | None, parent: str | None, if_not_exists: bool) -> None:
     """Create a tag."""
+    tag: dict[str, Any] = {"label": label, "name": label.lower().replace(" ", "")}
+    if color:
+        tag["color"] = color
+    if parent:
+        tag["parent"] = parent
+    if is_dry_run(ctx):
+        output_dry_run("tag.create", tag, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
 
     if if_not_exists:
@@ -67,15 +76,6 @@ def tag_create(ctx: click.Context, label: str, color: str | None, parent: str | 
         except Exception as e:
             output_error(str(e), ctx)
             raise SystemExit(1) from None
-
-    tag: dict[str, Any] = {"label": label, "name": label.lower().replace(" ", "")}
-    if color:
-        tag["color"] = color
-    if parent:
-        tag["parent"] = parent
-    if is_dry_run(ctx):
-        output_dry_run("tag.create", tag, ctx)
-        return
 
     try:
         client.v2.batch_tags(add=[tag])

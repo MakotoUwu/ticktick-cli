@@ -355,6 +355,18 @@ class TestPagination:
         assert data["has_more"] is False
         assert [d["id"] for d in data["data"]] == ["2", "3", "4"]
 
+    def test_limit_applies_after_offset(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(offset=1)
+        items = [{"id": str(i)} for i in range(5)]
+        output_list(items, ctx=ctx, limit=2)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["count"] == 2
+        assert data["total"] == 5
+        assert data["offset"] == 1
+        assert data["has_more"] is True
+        assert [d["id"] for d in data["data"]] == ["1", "2"]
+
     def test_offset_beyond_items(self, capsys: pytest.CaptureFixture) -> None:
         ctx = _make_ctx(offset=10)
         items = [{"id": "1"}, {"id": "2"}]

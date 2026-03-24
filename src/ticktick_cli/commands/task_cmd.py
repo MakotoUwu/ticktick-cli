@@ -23,6 +23,7 @@ from ticktick_cli.output import (
 
 PRIORITY_MAP = {"none": 0, "low": 1, "medium": 3, "high": 5}
 PRIORITY_REVERSE = {0: "none", 1: "low", 3: "medium", 5: "high"}
+_FETCH_ALL_LIMIT = 10_000
 
 
 def _format_task(task: dict[str, Any]) -> dict[str, Any]:
@@ -43,6 +44,15 @@ def _format_task(task: dict[str, Any]) -> dict[str, Any]:
         "pinnedTime": task.get("pinnedTime"),
         "items": task.get("items", []),  # subtask checklist items
     }
+
+
+def _request_page_limit(ctx: click.Context, limit: int) -> int:
+    """Fetch enough rows for global offset pagination before local slicing."""
+    offset = int(ctx.obj.get("offset", 0)) if ctx.obj else 0
+    fetch_all = bool(ctx.obj.get("all")) if ctx.obj else False
+    if fetch_all:
+        return max(limit + offset, _FETCH_ALL_LIMIT)
+    return limit + offset
 
 
 @click.group("task")
@@ -83,27 +93,9 @@ def task_add(
     if_not_exists: bool,
 ) -> None:
     """Create a new task."""
-    client = get_client(ctx.obj.get("profile", "default"))
-
-    if if_not_exists:
-        try:
-            tasks = client.get_all_tasks()
-            project_id = _resolve_project_id(client, project) if project else None
-            for t in tasks:
-                if (
-                    t.get("title", "").lower() == title.lower()
-                    and t.get("status", 0) < 2
-                    and (project_id is None or t.get("projectId") == project_id)
-                ):
-                    output_existing_item(_format_task(t), ctx)
-                    return
-        except Exception as e:
-            output_error(str(e), ctx)
-            raise SystemExit(1) from None
-
     task_data: dict[str, Any] = {"title": title}
     if project:
-        task_data["projectId"] = _resolve_project_id(client, project)
+        task_data["project"] = project
     if content:
         task_data["content"] = content
     task_data["priority"] = PRIORITY_MAP[priority]
@@ -123,6 +115,28 @@ def task_add(
     if is_dry_run(ctx):
         output_dry_run("task.add", task_data, ctx)
         return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+
+    if if_not_exists:
+        try:
+            tasks = client.get_all_tasks()
+            project_id = _resolve_project_id(client, project) if project else None
+            for t in tasks:
+                if (
+                    t.get("title", "").lower() == title.lower()
+                    and t.get("status", 0) < 2
+                    and (project_id is None or t.get("projectId") == project_id)
+                ):
+                    output_existing_item(_format_task(t), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
+
+    if project:
+        task_data["projectId"] = _resolve_project_id(client, project)
+        task_data.pop("project", None)
 
     try:
         if client.has_v2:
@@ -196,12 +210,9 @@ def task_list(
         # Sort
         tasks = _sort_tasks(tasks, sort)
 
-        # Limit
-        tasks = tasks[:limit]
-
         formatted = [_format_task(t) for t in tasks]
         columns = ["id", "title", "priority", "dueDate", "projectId", "tags"]
-        output_list(formatted, columns=columns, title="Tasks", ctx=ctx)
+        output_list(formatted, columns=columns, title="Tasks", ctx=ctx, limit=limit)
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -389,9 +400,14 @@ def task_search(ctx: click.Context, query: str, limit: int) -> None:
             t
             for t in tasks
             if q in t.get("title", "").lower() or q in t.get("content", "").lower()
-        ][:limit]
+        ]
         formatted = [_format_task(t) for t in matches]
-        output_list(formatted, columns=["id", "title", "priority", "dueDate", "projectId"], ctx=ctx)
+        output_list(
+            formatted,
+            columns=["id", "title", "priority", "dueDate", "projectId"],
+            ctx=ctx,
+            limit=limit,
+        )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -423,9 +439,15 @@ def task_completed(ctx: click.Context, from_date: str | None, to_date: str | Non
         now = datetime.now()
         fd = datetime.fromisoformat(from_date) if from_date else now - timedelta(days=30)
         td = datetime.fromisoformat(to_date) if to_date else now
-        tasks = client.v2.get_completed_tasks(fd, td, limit=limit)
+        tasks = client.v2.get_completed_tasks(fd, td, limit=_request_page_limit(ctx, limit))
         formatted = [_format_task(t) for t in tasks]
-        output_list(formatted, columns=["id", "title", "priority", "dueDate"], title="Completed Tasks", ctx=ctx)
+        output_list(
+            formatted,
+            columns=["id", "title", "priority", "dueDate"],
+            title="Completed Tasks",
+            ctx=ctx,
+            limit=limit,
+        )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -438,10 +460,16 @@ def task_trash(ctx: click.Context, limit: int) -> None:
     """List deleted tasks in trash (V2)."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
-        result = client.v2.get_deleted_tasks(limit=limit)
+        result = client.v2.get_deleted_tasks(limit=_request_page_limit(ctx, limit))
         tasks = result.get("tasks", []) if isinstance(result, dict) else result
-        formatted = [_format_task(t) for t in tasks[:limit]]
-        output_list(formatted, columns=["id", "title", "priority"], title="Trash", ctx=ctx)
+        formatted = [_format_task(t) for t in tasks]
+        output_list(
+            formatted,
+            columns=["id", "title", "priority"],
+            title="Trash",
+            ctx=ctx,
+            limit=limit,
+        )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

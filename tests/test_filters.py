@@ -25,6 +25,8 @@ def _make_ctx(**overrides: Any) -> dict[str, Any]:
         "fields": None,
         "dry_run": False,
         "output_format": "json",
+        "offset": 0,
+        "all": False,
     }
     defaults.update(overrides)
     return defaults
@@ -320,6 +322,19 @@ class TestFilterCreate:
         assert data["dry_run"] is True
         assert data["action"] == "filter.create"
 
+    @patch("ticktick_cli.commands.filter_cmd.get_client")
+    def test_create_dry_run_if_not_exists_skips_client(self, mock_get: MagicMock) -> None:
+        mock_get.side_effect = AssertionError("get_client should not be called")
+        runner = CliRunner()
+        result = runner.invoke(
+            filter_group,
+            ["create", "Test", "--if-not-exists"],
+            obj=_make_ctx(dry_run=True),
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+
 
 class TestFilterEdit:
     @patch("ticktick_cli.commands.filter_cmd.get_client")
@@ -491,6 +506,19 @@ class TestTemplateCreate:
         data = json.loads(result.output)
         assert data["dry_run"] is True
         assert data["action"] == "template.create"
+
+    @patch("ticktick_cli.commands.template_cmd.get_client")
+    def test_create_dry_run_if_not_exists_skips_client(self, mock_get: MagicMock) -> None:
+        mock_get.side_effect = AssertionError("get_client should not be called")
+        runner = CliRunner()
+        result = runner.invoke(
+            template_group,
+            ["create", "Test", "--if-not-exists"],
+            obj=_make_ctx(dry_run=True),
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
 
 
 class TestTemplateDelete:

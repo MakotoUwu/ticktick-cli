@@ -78,19 +78,6 @@ def template_create(
     if_not_exists: bool,
 ) -> None:
     """Create a new task template."""
-    if if_not_exists:
-        try:
-            client = get_client(ctx.obj.get("profile", "default"))
-            result = client.v2.get_templates()
-            raw = result.get("taskTemplates", []) if isinstance(result, dict) else []
-            for t in raw:
-                if t.get("title", "").lower() == title.lower():
-                    output_existing_item(TaskTemplate(**t).to_output(), ctx)
-                    return
-        except Exception as e:
-            output_error(str(e), ctx)
-            raise SystemExit(1) from None
-
     template_data: dict[str, Any] = {
         "id": _generate_object_id(),
         "createdTime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
@@ -105,6 +92,19 @@ def template_create(
     if is_dry_run(ctx):
         output_dry_run("template.create", template_data, ctx)
         return
+
+    if if_not_exists:
+        try:
+            client = get_client(ctx.obj.get("profile", "default"))
+            result = client.v2.get_templates()
+            raw = result.get("taskTemplates", []) if isinstance(result, dict) else []
+            for t in raw:
+                if t.get("title", "").lower() == title.lower():
+                    output_existing_item(TaskTemplate(**t).to_output(), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:

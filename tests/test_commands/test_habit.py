@@ -62,6 +62,16 @@ class TestHabitCreate:
         assert habit_data["goal"] == 5.0
         assert habit_data["unit"] == "km"
 
+    def test_create_habit_dry_run_if_not_exists_skips_client(self, runner: CliRunner) -> None:
+        with patch(
+            "ticktick_cli.commands.habit_cmd.get_client",
+            side_effect=AssertionError("get_client should not be called"),
+        ):
+            result = runner.invoke(cli, ["--dry-run", "habit", "create", "Meditate", "--if-not-exists"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+
 
 class TestHabitCheckin:
     def test_checkin_habit(self, runner: CliRunner, mock_client: MagicMock) -> None:

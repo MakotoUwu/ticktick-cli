@@ -129,19 +129,6 @@ def filter_create(
     if_not_exists: bool,
 ) -> None:
     """Create a new saved filter."""
-    if if_not_exists:
-        try:
-            client = get_client(ctx.obj.get("profile", "default"))
-            state = client.v2.sync()
-            raw_filters = state.get("filters") or []
-            for f in raw_filters:
-                if f.get("name", "").lower() == name.lower():
-                    output_existing_item(Filter(**f).to_output(), ctx)
-                    return
-        except Exception as e:
-            output_error(str(e), ctx)
-            raise SystemExit(1) from None
-
     rule = _build_rule(
         priorities=list(priority) if priority else None,
         date=date,
@@ -160,6 +147,19 @@ def filter_create(
     if is_dry_run(ctx):
         output_dry_run("filter.create", filter_data, ctx)
         return
+
+    if if_not_exists:
+        try:
+            client = get_client(ctx.obj.get("profile", "default"))
+            state = client.v2.sync()
+            raw_filters = state.get("filters") or []
+            for f in raw_filters:
+                if f.get("name", "").lower() == name.lower():
+                    output_existing_item(Filter(**f).to_output(), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:

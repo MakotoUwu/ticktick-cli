@@ -196,6 +196,49 @@ class TestCalendarEventList:
         assert limited_data["count"] == 1
 
     @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_events_applies_offset_before_limit(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {"accounts": []}
+        client.v2.get_calendar_subscriptions.return_value = []
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "cal1",
+                    "name": "Work",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "title": "A",
+                            "dueStart": "2099-03-24T09:00:00.000+0000",
+                            "dueEnd": "2099-03-24T09:30:00.000+0000",
+                            "isAllDay": False,
+                        },
+                        {
+                            "id": "evt2",
+                            "title": "B",
+                            "dueStart": "2099-03-24T10:00:00.000+0000",
+                            "dueEnd": "2099-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        },
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(
+            calendar_group,
+            ["event", "list", "--limit", "1"],
+            obj={**_make_ctx(), "offset": 1},
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["count"] == 1
+        assert data["data"][0]["id"] == "evt2"
+        assert data["total"] == 2
+
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
     def test_list_events_prefers_upcoming_before_past(self, mock_get: MagicMock) -> None:
         client = _mock_client()
         mock_get.return_value = client

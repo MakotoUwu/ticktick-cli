@@ -109,19 +109,6 @@ def habit_create(
     if_not_exists: bool,
 ) -> None:
     """Create a new habit."""
-    client = get_client(ctx.obj.get("profile", "default"))
-
-    if if_not_exists:
-        try:
-            habits = client.v2.get_habits()
-            for h in habits:
-                if h.get("name", "").lower() == name.lower():
-                    output_existing_item(_format_habit(h), ctx)
-                    return
-        except Exception as e:
-            output_error(str(e), ctx)
-            raise SystemExit(1) from None
-
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
     habit_id = uuid.uuid4().hex[:24]
 
@@ -157,6 +144,19 @@ def habit_create(
     if is_dry_run(ctx):
         output_dry_run("habit.create", habit_data, ctx)
         return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+
+    if if_not_exists:
+        try:
+            habits = client.v2.get_habits()
+            for h in habits:
+                if h.get("name", "").lower() == name.lower():
+                    output_existing_item(_format_habit(h), ctx)
+                    return
+        except Exception as e:
+            output_error(str(e), ctx)
+            raise SystemExit(1) from None
 
     try:
         client.v2.batch_habits(add=[habit_data])

@@ -44,6 +44,22 @@ class TestTaskList:
         data = json.loads(result.output)
         assert len(data["data"]) <= 1
 
+    def test_list_tasks_with_offset_and_limit(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["--offset", "1", "task", "list", "--sort", "title", "--limit", "1"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["count"] == 1
+        assert data["total"] == 2
+        assert data["data"][0]["title"] == "Write report"
+
+    def test_list_tasks_with_all_ignores_limit(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["--all", "task", "list", "--limit", "1"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["count"] == 2
+
 
 class TestTaskShow:
     def test_show_task(self, runner: CliRunner, mock_client: MagicMock) -> None:
@@ -80,6 +96,16 @@ class TestTaskAdd:
         assert task_data["title"] == "Important task"
         assert task_data["priority"] == 5
         assert task_data["tags"] == ["work", "urgent"]
+
+    def test_add_task_dry_run_if_not_exists_skips_client(self, runner: CliRunner) -> None:
+        with patch(
+            "ticktick_cli.commands.task_cmd.get_client",
+            side_effect=AssertionError("get_client should not be called"),
+        ):
+            result = runner.invoke(cli, ["--dry-run", "task", "add", "New task", "--if-not-exists"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
 
 
 class TestTaskDone:

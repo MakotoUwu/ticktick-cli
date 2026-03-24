@@ -28,6 +28,16 @@ class TestTagCreate:
         data = json.loads(result.output)
         assert "new-tag" in data["message"]
 
+    def test_create_tag_dry_run_if_not_exists_skips_client(self, runner: CliRunner) -> None:
+        with patch(
+            "ticktick_cli.commands.tag_cmd.get_client",
+            side_effect=AssertionError("get_client should not be called"),
+        ):
+            result = runner.invoke(cli, ["--dry-run", "tag", "create", "new-tag", "--if-not-exists"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+
 
 class TestTagRename:
     def test_rename_tag(self, runner: CliRunner, mock_client: MagicMock) -> None:

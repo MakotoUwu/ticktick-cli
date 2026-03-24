@@ -64,6 +64,15 @@ def project_create(
     ctx: click.Context, name: str, color: str | None, kind: str, view: str, folder: str | None, if_not_exists: bool
 ) -> None:
     """Create a new project."""
+    data: dict[str, Any] = {"name": name, "kind": kind, "viewMode": view}
+    if color:
+        data["color"] = color
+    if folder:
+        data["groupId"] = folder
+    if is_dry_run(ctx):
+        output_dry_run("project.create", data, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
 
     if if_not_exists:
@@ -76,15 +85,6 @@ def project_create(
         except Exception as e:
             output_error(str(e), ctx)
             raise SystemExit(1) from None
-
-    data: dict[str, Any] = {"name": name, "kind": kind, "viewMode": view}
-    if color:
-        data["color"] = color
-    if folder:
-        data["groupId"] = folder
-    if is_dry_run(ctx):
-        output_dry_run("project.create", data, ctx)
-        return
 
     try:
         if client.has_v2:

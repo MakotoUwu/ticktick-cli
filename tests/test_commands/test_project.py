@@ -39,6 +39,16 @@ class TestProjectCreate:
             ])
         assert result.exit_code == 0
 
+    def test_create_project_dry_run_if_not_exists_skips_client(self, runner: CliRunner) -> None:
+        with patch(
+            "ticktick_cli.commands.project_cmd.get_client",
+            side_effect=AssertionError("get_client should not be called"),
+        ):
+            result = runner.invoke(cli, ["--dry-run", "project", "create", "My Project", "--if-not-exists"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+
 
 class TestProjectDelete:
     def test_delete_with_yes_flag(self, runner: CliRunner, mock_client: MagicMock) -> None:

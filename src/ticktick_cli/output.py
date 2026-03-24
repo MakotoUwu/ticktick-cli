@@ -203,14 +203,15 @@ def output_list(
     columns: list[str] | None = None,
     title: str | None = None,
     ctx: click.Context | None = None,
+    limit: int | None = None,
 ) -> None:
     """Output a list of items as JSON array or rich table."""
-    # Compute pagination before any slicing
     total = len(items)
     offset, fetch_all = _get_pagination(ctx)
 
     if not fetch_all:
-        items = items[offset:]  # apply offset first
+        end = offset + limit if limit is not None else None
+        items = items[offset:end]
 
     if _is_quiet(ctx):
         for item in items:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
@@ -161,6 +162,17 @@ def test_env_var_output(runner: CliRunner) -> None:
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["ok"] is True
+
+
+def test_env_var_output_respected_in_tty(runner: CliRunner, mock_client) -> None:
+    """TICKTICK_OUTPUT should disable auto-human output in TTY sessions."""
+    with (
+        patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client),
+        patch("sys.stdout.isatty", return_value=True),
+    ):
+        result = runner.invoke(cli, ["task", "list"], env={"TICKTICK_OUTPUT": "yaml"})
+    assert result.exit_code == 0
+    assert result.output.lstrip().startswith("- id:")
 
 
 def test_env_var_profile(runner: CliRunner) -> None:
