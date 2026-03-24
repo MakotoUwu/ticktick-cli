@@ -9,10 +9,10 @@ metadata:
         - ticktick
         - python3
     emoji: "\u2705"
-    homepage: https://github.com/mamorka/ticktick-cli
+    homepage: https://github.com/MakotoUwu/ticktick-cli
     install:
       - kind: uv
-        package: ticktick-cli
+        package: ticktick-agent-cli
         bins:
           - ticktick
 ---
@@ -33,14 +33,16 @@ when called by a human or by an AI agent via shell.
 
 ```bash
 # From source (recommended for now)
-git clone https://github.com/mamorka/ticktick-cli.git
+git clone https://github.com/MakotoUwu/ticktick-cli.git
 cd ticktick-cli
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 
 # Or via pip once published
-pip install ticktick-cli
+pip install ticktick-agent-cli
 ```
+
+The published package name is `ticktick-agent-cli`; the installed command remains `ticktick`.
 
 ## Authentication
 

@@ -61,7 +61,7 @@ The [emerging consensus](https://steipete.me/posts/2025/peekaboo-2-freeing-the-c
 ### From source (recommended for now)
 
 ```bash
-git clone https://github.com/mamorka/ticktick-cli.git
+git clone https://github.com/MakotoUwu/ticktick-cli.git
 cd ticktick-cli
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
@@ -70,14 +70,16 @@ pip install -e .
 ### pip (once published)
 
 ```bash
-pip install ticktick-cli
+pip install ticktick-agent-cli
 ```
 
 ### pipx (isolated install)
 
 ```bash
-pipx install ticktick-cli
+pipx install ticktick-agent-cli
 ```
+
+The published package name is `ticktick-agent-cli`; the installed command remains `ticktick`.
 
 ## Quick Start
 
@@ -335,7 +337,7 @@ ticktick config get default_project
 
 ```bash
 # Clone and set up
-git clone https://github.com/mamorka/ticktick-cli.git
+git clone https://github.com/MakotoUwu/ticktick-cli.git
 cd ticktick-cli
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

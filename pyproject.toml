@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ticktick-cli"
+name = "ticktick-agent-cli"
 version = "0.1.0"
 description = "Agent-native CLI for TickTick task management — full API coverage via V1 + V2"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "ticktick-cli contributors" }]
-keywords = ["ticktick", "cli", "tasks", "productivity", "agent"]
+authors = [{ name = "Oleksandr Tsepukh" }]
+keywords = ["ticktick", "cli", "tasks", "productivity", "agent", "ai-agent", "agent-native", "automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -30,6 +30,12 @@ dependencies = [
     "rich>=13.0",
     "pydantic>=2.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/MakotoUwu/ticktick-cli"
+Repository = "https://github.com/MakotoUwu/ticktick-cli"
+Issues = "https://github.com/MakotoUwu/ticktick-cli/issues"
+Changelog = "https://github.com/MakotoUwu/ticktick-cli/blob/main/CHANGELOG.md"
 
 [project.scripts]
 ticktick = "ticktick_cli.cli:cli"

@@ -370,7 +370,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ticktick-cli"
+name = "ticktick-agent-cli"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
