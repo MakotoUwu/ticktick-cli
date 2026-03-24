@@ -16,5 +16,8 @@ env/
 *.so
 .coverage
 htmlcov/
+.claude/
 .codex-playwright/
 output/playwright/
+debug/focus_state.json
+debug/index.html
