@@ -310,3 +310,141 @@ class TestCalendarEventList:
 
         data = json.loads(result.output)
         assert data["data"][0]["sourceType"] == "subscription"
+
+
+class TestCalendarEventShow:
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_show_event(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {"accounts": []}
+        client.v2.get_calendar_subscriptions.return_value = []
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "cal1",
+                    "name": "TickTick",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "uid": "69bf17e6c1955180d495f7bf@calendar.ticktick.com",
+                            "title": "Task-backed event",
+                            "dueStart": "2099-03-24T10:00:00.000+0000",
+                            "dueEnd": "2099-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["event", "show", "evt1"], obj=_make_ctx())
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["data"]["id"] == "evt1"
+        assert data["data"]["sourceType"] == "ticktick"
+        assert data["data"]["linkedTaskId"] == "69bf17e6c1955180d495f7bf"
+
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_show_event_not_found(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {"accounts": []}
+        client.v2.get_calendar_subscriptions.return_value = []
+        client.v2.get_calendar_bound_events.return_value = {"events": []}
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["event", "show", "missing"], obj=_make_ctx())
+        assert result.exit_code == 4
+
+        data = json.loads(result.output)
+        assert data["ok"] is False
+        assert "Calendar event not found" in data["error"]
+
+
+class TestCalendarEventTask:
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_task_bridge_returns_linked_task(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {"accounts": []}
+        client.v2.get_calendar_subscriptions.return_value = []
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "ticktick-cal",
+                    "name": "TickTick",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "uid": "69bf17e6c1955180d495f7bf@calendar.ticktick.com",
+                            "title": "Task-backed event",
+                            "dueStart": "2099-03-24T10:00:00.000+0000",
+                            "dueEnd": "2099-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                }
+            ]
+        }
+        client.v2.get_task.return_value = {
+            "id": "69bf17e6c1955180d495f7bf",
+            "title": "Resolved task",
+            "status": 0,
+            "priority": 0,
+            "projectId": "inbox",
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["event", "task", "evt1"], obj=_make_ctx())
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["data"]["id"] == "69bf17e6c1955180d495f7bf"
+        assert data["data"]["calendarEventId"] == "evt1"
+        assert data["data"]["calendarEventTitle"] == "Task-backed event"
+        assert data["data"]["calendarSourceType"] == "ticktick"
+
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_task_bridge_rejects_external_event(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {
+            "accounts": [
+                {
+                    "id": "acct1",
+                    "account": "user@example.com",
+                    "site": "google",
+                    "calendars": [{"id": "cal1", "visible": True}],
+                }
+            ]
+        }
+        client.v2.get_calendar_subscriptions.return_value = []
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "cal1",
+                    "name": "Work",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "uid": "uid1",
+                            "title": "External event",
+                            "dueStart": "2099-03-24T10:00:00.000+0000",
+                            "dueEnd": "2099-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["event", "task", "evt1"], obj=_make_ctx())
+        assert result.exit_code == 1
+
+        data = json.loads(result.output)
+        assert data["ok"] is False
+        assert "not backed by a TickTick task" in data["error"]

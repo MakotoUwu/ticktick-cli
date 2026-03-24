@@ -127,6 +127,8 @@ ticktick focus by-tag [--days N]                               # Focus time by t
 ticktick calendar account list
 ticktick calendar subscription list
 ticktick calendar event list [--calendar-id CALENDAR_ID] [--limit N]
+ticktick calendar event show EVENT_ID
+ticktick calendar event task EVENT_ID
 ticktick --fields title,sourceType,linkedTaskId,calendarName calendar event list [--limit N]
 ```
 

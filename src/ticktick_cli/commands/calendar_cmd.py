@@ -9,7 +9,8 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_error, output_list
+from ticktick_cli.commands.task_cmd import _format_task
+from ticktick_cli.output import output_error, output_item, output_list
 
 
 def _normalize_subscriptions(payload: Any) -> list[dict[str, Any]]:
@@ -159,6 +160,23 @@ def _flatten_calendar_events(
     return rows
 
 
+def _get_calendar_events(client: Any) -> list[dict[str, Any]]:
+    account_payload = client.v2.get_calendar_third_accounts()
+    subscription_payload = client.v2.get_calendar_subscriptions()
+    return _flatten_calendar_events(
+        client.v2.get_calendar_bound_events(),
+        external_calendars=_build_external_calendar_map(account_payload),
+        subscription_ids=_build_subscription_id_set(subscription_payload),
+    )
+
+
+def _find_calendar_event(client: Any, event_id: str) -> dict[str, Any] | None:
+    for event in _get_calendar_events(client):
+        if event.get("id") == event_id:
+            return event
+    return None
+
+
 def _event_sort_key(event: dict[str, Any]) -> tuple[int, float, str, str]:
     due_start = event.get("dueStart", "")
     due_end = event.get("dueEnd", "") or due_start
@@ -260,13 +278,7 @@ def calendar_event_list(
     """List bound calendar events."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
-        account_payload = client.v2.get_calendar_third_accounts()
-        subscription_payload = client.v2.get_calendar_subscriptions()
-        events = _flatten_calendar_events(
-            client.v2.get_calendar_bound_events(),
-            external_calendars=_build_external_calendar_map(account_payload),
-            subscription_ids=_build_subscription_id_set(subscription_payload),
-        )
+        events = _get_calendar_events(client)
         if calendar_id:
             events = [event for event in events if event.get("calendarId") == calendar_id]
         events.sort(key=_event_sort_key)
@@ -288,6 +300,57 @@ def calendar_event_list(
             title="Calendar Events",
             ctx=ctx,
         )
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@calendar_event_group.command("show")
+@click.argument("event_id")
+@click.pass_context
+def calendar_event_show(ctx: click.Context, event_id: str) -> None:
+    """Show detailed information for a single bound calendar event."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        event = _find_calendar_event(client, event_id)
+        if not event:
+            output_error(f"Calendar event not found: {event_id}", ctx, exit_code=4)
+            raise SystemExit(4)
+        output_item(event, ctx)
+    except SystemExit:
+        raise
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@calendar_event_group.command("task")
+@click.argument("event_id")
+@click.pass_context
+def calendar_event_task(ctx: click.Context, event_id: str) -> None:
+    """Resolve a TickTick-owned calendar event to its backing task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        event = _find_calendar_event(client, event_id)
+        if not event:
+            output_error(f"Calendar event not found: {event_id}", ctx, exit_code=4)
+            raise SystemExit(4)
+
+        linked_task_id = event.get("linkedTaskId")
+        if not linked_task_id:
+            output_error(
+                "Calendar event is not backed by a TickTick task. External and subscribed calendars are read-only mirrors.",
+                ctx,
+            )
+            raise SystemExit(1)
+
+        task = _format_task(client.v2.get_task(linked_task_id))
+        task["calendarEventId"] = event.get("id", "")
+        task["calendarEventTitle"] = event.get("title", "")
+        task["calendarSourceType"] = event.get("sourceType", "")
+        output_item(task, ctx)
+    except SystemExit:
+        raise
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

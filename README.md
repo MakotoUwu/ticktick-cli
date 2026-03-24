@@ -127,6 +127,9 @@ ticktick calendar event list --limit 10
 # Distinguish TickTick-owned entries from external mirrors
 ticktick --fields title,sourceType,linkedTaskId,calendarName calendar event list --limit 10
 
+# Resolve a TickTick-owned calendar entry to its backing task
+ticktick calendar event task EVENT_ID
+
 # Check focus timer status
 ticktick focus status
 
