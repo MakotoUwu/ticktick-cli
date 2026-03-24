@@ -12,6 +12,7 @@ from ticktick_cli.auth import get_client
 
 # Import all command groups
 from ticktick_cli.commands.auth_cmd import auth_group
+from ticktick_cli.commands.calendar_cmd import calendar_group
 from ticktick_cli.commands.config_cmd import config_group
 from ticktick_cli.commands.filter_cmd import filter_group
 from ticktick_cli.commands.focus_cmd import focus_group
@@ -82,6 +83,7 @@ def cli(ctx: click.Context, human: bool, verbose: bool, profile: str, fields: st
 # ── Register all command groups ──────────────────────────
 
 cli.add_command(auth_group, "auth")
+cli.add_command(calendar_group, "calendar")
 cli.add_command(task_group, "task")
 cli.add_command(project_group, "project")
 cli.add_command(folder_group, "folder")

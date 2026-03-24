@@ -118,6 +118,12 @@ ticktick --human habit list
 # Start a 25-minute focus session
 ticktick focus start --duration 25
 
+# Inspect linked calendar accounts
+ticktick calendar account list
+
+# Inspect upcoming linked calendar events
+ticktick calendar event list --limit 10
+
 # Check focus timer status
 ticktick focus status
 
@@ -428,7 +434,7 @@ This is an **unofficial, community-built** CLI. TickTick released their own [`@t
 - [ ] Package and submit a Claude Code plugin directory entry
 - [ ] Publish native skill distribution for OpenClaw / ClawHub
 - [ ] Homebrew formula
-- [ ] Read-only calendar discovery commands (`calendar account list`, `calendar subscription list`, `calendar event list`)
+- [x] Read-only calendar discovery commands (`calendar account list`, `calendar subscription list`, `calendar event list`)
 - [ ] Advanced productivity reports
 - [ ] Focus session ↔ task linking
 

@@ -111,7 +111,7 @@ ticktick column delete COLUMN_ID --project PROJECT_ID --yes
 ### Focus / Pomodoro
 
 ```bash
-ticktick focus start [--duration 25] [--note "deep work"]     # Start timer
+ticktick focus start [--duration 25] [--note "deep work"] [--task TASK_ID]  # Start timer
 ticktick focus stop [--save/--no-save]                         # Stop timer
 ticktick focus status                                          # Current timer state
 ticktick focus log --start HH:MM --end HH:MM [--note "note"]  # Log past session
@@ -119,6 +119,14 @@ ticktick focus delete POMODORO_ID                              # Delete record
 ticktick focus stats                                           # Today/total counts
 ticktick focus heatmap [--days N]                              # Daily focus heatmap
 ticktick focus by-tag [--days N]                               # Focus time by tag
+```
+
+### Calendar
+
+```bash
+ticktick calendar account list
+ticktick calendar subscription list
+ticktick calendar event list [--calendar-id CALENDAR_ID] [--limit N]
 ```
 
 ### Filters (Smart Lists)

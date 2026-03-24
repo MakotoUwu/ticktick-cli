@@ -1,0 +1,212 @@
+"""Tests for read-only calendar discovery commands."""
+
+from __future__ import annotations
+
+import json
+from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
+
+from ticktick_cli.commands.calendar_cmd import calendar_group
+
+
+def _make_ctx() -> dict[str, object]:
+    return {
+        "human": False,
+        "verbose": False,
+        "profile": "default",
+        "fields": None,
+        "dry_run": False,
+        "output_format": "json",
+        "quiet": False,
+        "offset": 0,
+        "all": False,
+    }
+
+
+def _mock_client() -> MagicMock:
+    client = MagicMock()
+    client.v2 = MagicMock()
+    return client
+
+
+class TestCalendarAccountList:
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_accounts(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {
+            "accounts": [
+                {
+                    "id": "acct1",
+                    "account": "user@example.com",
+                    "site": "google",
+                    "createdTime": "2026-03-01T10:00:00.000+0000",
+                    "modifiedTime": "2026-03-02T10:00:00.000+0000",
+                    "calendars": [
+                        {"id": "cal1", "visible": True},
+                        {"id": "cal2", "visible": False},
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["account", "list"], obj=_make_ctx())
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["count"] == 1
+        assert data["data"][0]["id"] == "acct1"
+        assert data["data"][0]["calendarCount"] == 2
+        assert data["data"][0]["visibleCalendars"] == 1
+
+
+class TestCalendarSubscriptionList:
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_subscriptions(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_subscriptions.return_value = [
+            {"id": "sub1", "name": "Belgian holidays", "url": "https://example.com/holidays.ics"}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["subscription", "list"], obj=_make_ctx())
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["count"] == 1
+        assert data["data"][0]["id"] == "sub1"
+        assert data["data"][0]["name"] == "Belgian holidays"
+
+
+class TestCalendarEventList:
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_events_flattens_grouped_payload(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "cal1",
+                    "name": "Work",
+                    "color": "#123456",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "uid": "uid1",
+                            "title": "Team sync",
+                            "dueStart": "2026-03-24T09:00:00.000+0000",
+                            "dueEnd": "2026-03-24T09:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["event", "list"], obj=_make_ctx())
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["count"] == 1
+        assert data["data"][0]["id"] == "evt1"
+        assert data["data"][0]["calendarId"] == "cal1"
+        assert data["data"][0]["calendarName"] == "Work"
+
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_events_filters_and_limits(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "cal1",
+                    "name": "Work",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "title": "A",
+                            "dueStart": "2026-03-24T09:00:00.000+0000",
+                            "dueEnd": "2026-03-24T09:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                },
+                {
+                    "id": "cal2",
+                    "name": "Personal",
+                    "events": [
+                        {
+                            "id": "evt2",
+                            "title": "B",
+                            "dueStart": "2026-03-24T10:00:00.000+0000",
+                            "dueEnd": "2026-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                },
+            ]
+        }
+
+        runner = CliRunner()
+        filtered = runner.invoke(
+            calendar_group,
+            ["event", "list", "--calendar-id", "cal2"],
+            obj=_make_ctx(),
+        )
+        assert filtered.exit_code == 0
+        filtered_data = json.loads(filtered.output)
+        assert filtered_data["count"] == 1
+        assert filtered_data["data"][0]["calendarId"] == "cal2"
+
+        limited = runner.invoke(
+            calendar_group,
+            ["event", "list", "--limit", "1"],
+            obj=_make_ctx(),
+        )
+        assert limited.exit_code == 0
+        limited_data = json.loads(limited.output)
+        assert limited_data["count"] == 1
+
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_events_prefers_upcoming_before_past(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "cal1",
+                    "name": "Mixed",
+                    "events": [
+                        {
+                            "id": "past",
+                            "title": "Past",
+                            "dueStart": "2025-03-24T09:00:00.000+0000",
+                            "dueEnd": "2025-03-24T09:30:00.000+0000",
+                            "isAllDay": False,
+                        },
+                        {
+                            "id": "future",
+                            "title": "Future",
+                            "dueStart": "2099-03-24T10:00:00.000+0000",
+                            "dueEnd": "2099-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        },
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(
+            calendar_group,
+            ["event", "list", "--limit", "1"],
+            obj=_make_ctx(),
+        )
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["data"][0]["id"] == "future"

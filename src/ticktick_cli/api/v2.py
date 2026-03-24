@@ -222,6 +222,20 @@ class V2Client(BaseClient):
     def merge_tags(self, source: str, target: str) -> Any:
         return self.put("/tag/merge", json_data={"name": source, "newName": target})
 
+    # ── Calendar integrations ────────────────────────────────
+
+    def get_calendar_subscriptions(self) -> Any:
+        """List subscribed external calendars."""
+        return self.get("/calendar/subscription")
+
+    def get_calendar_third_accounts(self) -> dict[str, Any]:
+        """List linked third-party calendar accounts and their calendars."""
+        return self.get("/calendar/third/accounts")
+
+    def get_calendar_bound_events(self) -> dict[str, Any]:
+        """List bound calendar events grouped by calendar."""
+        return self.get("/calendar/bind/events/all")
+
     # ── Focus / Pomodoro ──────────────────────────────────────
 
     def get_focus_heatmap(self, start: date, end: date) -> list[dict]:
