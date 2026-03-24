@@ -124,6 +124,9 @@ ticktick calendar account list
 # Inspect upcoming linked calendar events
 ticktick calendar event list --limit 10
 
+# Distinguish TickTick-owned entries from external mirrors
+ticktick --fields title,sourceType,linkedTaskId,calendarName calendar event list --limit 10
+
 # Check focus timer status
 ticktick focus status
 

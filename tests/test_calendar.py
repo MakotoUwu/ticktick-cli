@@ -86,6 +86,17 @@ class TestCalendarEventList:
     def test_list_events_flattens_grouped_payload(self, mock_get: MagicMock) -> None:
         client = _mock_client()
         mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {
+            "accounts": [
+                {
+                    "id": "acct1",
+                    "account": "user@example.com",
+                    "site": "google",
+                    "calendars": [{"id": "cal1", "visible": True}],
+                }
+            ]
+        }
+        client.v2.get_calendar_subscriptions.return_value = []
         client.v2.get_calendar_bound_events.return_value = {
             "events": [
                 {
@@ -115,11 +126,24 @@ class TestCalendarEventList:
         assert data["data"][0]["id"] == "evt1"
         assert data["data"][0]["calendarId"] == "cal1"
         assert data["data"][0]["calendarName"] == "Work"
+        assert data["data"][0]["sourceType"] == "external"
+        assert data["data"][0]["linkedTaskId"] is None
 
     @patch("ticktick_cli.commands.calendar_cmd.get_client")
     def test_list_events_filters_and_limits(self, mock_get: MagicMock) -> None:
         client = _mock_client()
         mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {
+            "accounts": [
+                {
+                    "id": "acct1",
+                    "account": "user@example.com",
+                    "site": "google",
+                    "calendars": [{"id": "cal1", "visible": True}],
+                }
+            ]
+        }
+        client.v2.get_calendar_subscriptions.return_value = []
         client.v2.get_calendar_bound_events.return_value = {
             "events": [
                 {
@@ -175,6 +199,17 @@ class TestCalendarEventList:
     def test_list_events_prefers_upcoming_before_past(self, mock_get: MagicMock) -> None:
         client = _mock_client()
         mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {
+            "accounts": [
+                {
+                    "id": "acct1",
+                    "account": "user@example.com",
+                    "site": "google",
+                    "calendars": [{"id": "cal1", "visible": True}],
+                }
+            ]
+        }
+        client.v2.get_calendar_subscriptions.return_value = []
         client.v2.get_calendar_bound_events.return_value = {
             "events": [
                 {
@@ -210,3 +245,68 @@ class TestCalendarEventList:
 
         data = json.loads(result.output)
         assert data["data"][0]["id"] == "future"
+
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_events_infers_ticktick_source_and_linked_task(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {"accounts": []}
+        client.v2.get_calendar_subscriptions.return_value = []
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "ticktick-cal",
+                    "name": "TickTick",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "uid": "69bf17e6c1955180d495f7bf@calendar.ticktick.com",
+                            "title": "Task-backed event",
+                            "dueStart": "2099-03-24T10:00:00.000+0000",
+                            "dueEnd": "2099-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["event", "list"], obj=_make_ctx())
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["data"][0]["sourceType"] == "ticktick"
+        assert data["data"][0]["linkedTaskId"] == "69bf17e6c1955180d495f7bf"
+
+    @patch("ticktick_cli.commands.calendar_cmd.get_client")
+    def test_list_events_marks_subscription_source(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.get_calendar_third_accounts.return_value = {"accounts": []}
+        client.v2.get_calendar_subscriptions.return_value = [{"id": "sub-cal", "name": "Subscribed"}]
+        client.v2.get_calendar_bound_events.return_value = {
+            "events": [
+                {
+                    "id": "sub-cal",
+                    "name": "Subscribed",
+                    "events": [
+                        {
+                            "id": "evt1",
+                            "uid": "subscription@example.com",
+                            "title": "Subscribed event",
+                            "dueStart": "2099-03-24T10:00:00.000+0000",
+                            "dueEnd": "2099-03-24T10:30:00.000+0000",
+                            "isAllDay": False,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(calendar_group, ["event", "list"], obj=_make_ctx())
+        assert result.exit_code == 0
+
+        data = json.loads(result.output)
+        assert data["data"][0]["sourceType"] == "subscription"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 import click
@@ -49,7 +50,56 @@ def _format_calendar_accounts(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return formatted
 
 
-def _flatten_calendar_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def _build_external_calendar_map(payload: dict[str, Any]) -> dict[str, dict[str, str]]:
+    accounts = payload.get("accounts", [])
+    if not isinstance(accounts, list):
+        return {}
+
+    calendar_map: dict[str, dict[str, str]] = {}
+    for account in accounts:
+        if not isinstance(account, dict):
+            continue
+        calendars = account.get("calendars", [])
+        if not isinstance(calendars, list):
+            continue
+        for calendar in calendars:
+            if not isinstance(calendar, dict):
+                continue
+            calendar_id = calendar.get("id", "")
+            if not calendar_id:
+                continue
+            calendar_map[calendar_id] = {
+                "sourceSite": account.get("site", ""),
+                "sourceAccount": account.get("account", ""),
+            }
+    return calendar_map
+
+
+def _build_subscription_id_set(payload: Any) -> set[str]:
+    subscriptions = _normalize_subscriptions(payload)
+    return {
+        subscription.get("id", "")
+        for subscription in subscriptions
+        if isinstance(subscription, dict) and subscription.get("id")
+    }
+
+
+def _extract_linked_task_id(uid: str) -> str | None:
+    if not uid.endswith("@calendar.ticktick.com"):
+        return None
+
+    candidate = uid.partition("@")[0]
+    if re.fullmatch(r"[0-9a-f]{24}", candidate):
+        return candidate
+    return None
+
+
+def _flatten_calendar_events(
+    payload: dict[str, Any],
+    *,
+    external_calendars: dict[str, dict[str, str]],
+    subscription_ids: set[str],
+) -> list[dict[str, Any]]:
     calendars = payload.get("events", [])
     if not isinstance(calendars, list):
         return []
@@ -67,10 +117,28 @@ def _flatten_calendar_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
         for event in entries:
             if not isinstance(event, dict):
                 continue
+            uid = event.get("uid", "")
+            linked_task_id = _extract_linked_task_id(uid) if isinstance(uid, str) else None
+            if linked_task_id or calendar_name == "TickTick":
+                source_type = "ticktick"
+                source_site = "ticktick"
+                source_account = ""
+            elif calendar_id in subscription_ids:
+                source_type = "subscription"
+                source_site = "subscription"
+                source_account = ""
+            elif calendar_id in external_calendars:
+                source_type = "external"
+                source_site = external_calendars[calendar_id].get("sourceSite", "")
+                source_account = external_calendars[calendar_id].get("sourceAccount", "")
+            else:
+                source_type = "unknown"
+                source_site = ""
+                source_account = ""
             rows.append(
                 {
                     "id": event.get("id", ""),
-                    "uid": event.get("uid", ""),
+                    "uid": uid,
                     "title": event.get("title", ""),
                     "dueStart": event.get("dueStart", ""),
                     "dueEnd": event.get("dueEnd", ""),
@@ -78,6 +146,10 @@ def _flatten_calendar_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "calendarId": calendar_id,
                     "calendarName": calendar_name,
                     "calendarColor": calendar_color,
+                    "sourceType": source_type,
+                    "sourceSite": source_site,
+                    "sourceAccount": source_account,
+                    "linkedTaskId": linked_task_id,
                     "timezone": event.get("timezone", ""),
                     "location": event.get("location", ""),
                     "responseStatus": event.get("responseStatus", ""),
@@ -188,7 +260,13 @@ def calendar_event_list(
     """List bound calendar events."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
-        events = _flatten_calendar_events(client.v2.get_calendar_bound_events())
+        account_payload = client.v2.get_calendar_third_accounts()
+        subscription_payload = client.v2.get_calendar_subscriptions()
+        events = _flatten_calendar_events(
+            client.v2.get_calendar_bound_events(),
+            external_calendars=_build_external_calendar_map(account_payload),
+            subscription_ids=_build_subscription_id_set(subscription_payload),
+        )
         if calendar_id:
             events = [event for event in events if event.get("calendarId") == calendar_id]
         events.sort(key=_event_sort_key)
@@ -202,6 +280,8 @@ def calendar_event_list(
                 "dueStart",
                 "dueEnd",
                 "isAllDay",
+                "sourceType",
+                "linkedTaskId",
                 "calendarId",
                 "calendarName",
             ],
