@@ -129,7 +129,13 @@ class TestAuthLogin:
             ])
         assert result.exit_code == 3
 
-    def test_login_missing_client_id_fails(self, runner: CliRunner, temp_auth_env: Path) -> None:
+    def test_login_missing_client_id_fails(
+        self,
+        runner: CliRunner,
+        temp_auth_env: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("TICKTICK_CLIENT_ID", raising=False)
         result = runner.invoke(cli, ["auth", "login", "--client-secret", "x"])
         assert result.exit_code != 0
         assert "client-id" in result.output.lower() or "Missing" in result.output
@@ -162,7 +168,13 @@ class TestAuthLoginV2:
             ])
         assert result.exit_code == 3
 
-    def test_login_v2_missing_password_fails(self, runner: CliRunner, temp_auth_env: Path) -> None:
+    def test_login_v2_missing_password_fails(
+        self,
+        runner: CliRunner,
+        temp_auth_env: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("TICKTICK_PASSWORD", raising=False)
         result = runner.invoke(cli, ["auth", "login-v2", "--username", "user"])
         assert result.exit_code != 0
 
