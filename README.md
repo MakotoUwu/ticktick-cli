@@ -13,7 +13,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TickTick_API-100%25_coverage-brightgreen" alt="API Coverage">
   <a href="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml"><img src="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-393_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-439_passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/output-JSON_%7C_CSV_%7C_YAML_%7C_Rich_Tables-blue" alt="Output Modes">
 </p>
 
@@ -67,7 +67,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
-### pip (once published)
+### pip
 
 ```bash
 pip install ticktick-agent-cli
@@ -345,8 +345,30 @@ pip install -e ".[dev]"
 # Run tests
 pytest -v
 
-# All 314 tests should pass
+# Build release artifacts
+uv build
+
+# All 439 tests should pass
 ```
+
+### Releasing
+
+1. Update `version` in `pyproject.toml`.
+2. Move the relevant notes from `CHANGELOG.md` into a dated release section.
+3. Run local release checks:
+
+```bash
+ruff check src/ tests/
+pytest -v --tb=short
+uv build
+uvx twine check dist/*
+```
+
+4. Push `main`.
+5. For a staging publish, run the `Publish Python Package` GitHub Actions workflow with the `testpypi` target.
+6. For a production publish, create and publish a GitHub Release (or manually dispatch the workflow with the `pypi` target).
+
+The repository includes a trusted-publishing-ready workflow in `.github/workflows/publish.yml`. One-time setup is still required in GitHub environments and in the PyPI/TestPyPI Trusted Publisher settings.
 
 ### Project Structure
 
@@ -438,7 +460,8 @@ This is an **unofficial, community-built** CLI. TickTick released their own [`@t
 
 ### Next
 
-- [ ] Publish package to PyPI
+- [x] Publish package to PyPI
+- [ ] Configure Trusted Publishing for repeatable PyPI/TestPyPI releases
 - [ ] Package and submit a Claude Code plugin directory entry
 - [ ] Publish native skill distribution for OpenClaw / ClawHub
 - [ ] Homebrew formula
