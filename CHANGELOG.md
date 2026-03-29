@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-29
+
 ### Added
 
 - Trusted-publishing-ready GitHub Actions workflow for TestPyPI and PyPI releases

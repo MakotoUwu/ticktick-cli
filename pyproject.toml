@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ticktick-agent-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agent-native CLI for TickTick task management — full API coverage via V1 + V2"
 readme = "README.md"
 license = "MIT"
