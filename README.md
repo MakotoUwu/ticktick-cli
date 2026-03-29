@@ -10,6 +10,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/unofficial-community_project-orange" alt="Unofficial">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"></a>
+  <a href="https://pypi.org/project/ticktick-agent-cli/"><img src="https://img.shields.io/pypi/v/ticktick-agent-cli?logo=pypi&logoColor=white" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TickTick_API-100%25_coverage-brightgreen" alt="API Coverage">
   <a href="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml"><img src="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -58,7 +59,7 @@ The [emerging consensus](https://steipete.me/posts/2025/peekaboo-2-freeing-the-c
 
 ## Installation
 
-### From source (recommended for now)
+### From source (development)
 
 ```bash
 git clone https://github.com/MakotoUwu/ticktick-cli.git
@@ -457,15 +458,15 @@ This is an **unofficial, community-built** CLI. TickTick released their own [`@t
 - [x] Smart lists / saved filters
 - [x] Task templates (save/reuse)
 - [x] Task ↔ Note conversion
+- [x] Read-only calendar discovery commands (`calendar account list`, `calendar subscription list`, `calendar event list`)
+- [x] Publish package to PyPI
+- [x] Configure Trusted Publishing for repeatable PyPI/TestPyPI releases
 
 ### Next
 
-- [x] Publish package to PyPI
-- [ ] Configure Trusted Publishing for repeatable PyPI/TestPyPI releases
 - [ ] Package and submit a Claude Code plugin directory entry
 - [ ] Publish native skill distribution for OpenClaw / ClawHub
 - [ ] Homebrew formula
-- [x] Read-only calendar discovery commands (`calendar account list`, `calendar subscription list`, `calendar event list`)
 - [ ] Advanced productivity reports
 - [ ] Focus session ↔ task linking
 

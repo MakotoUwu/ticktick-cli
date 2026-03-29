@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- GitHub Actions workflows now opt into the Node 24 runtime to avoid upcoming runner deprecation issues
+- README roadmap and installation docs now reflect the live PyPI release and working Trusted Publishing setup
+
 ## [0.1.1] - 2026-03-29
 
 ### Added
