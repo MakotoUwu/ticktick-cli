@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Marketplace-ready Claude Code plugin bundle with packaged TickTick commands and operator Skill
+
 ### Changed
 
 - GitHub Actions workflows now opt into the Node 24 runtime to avoid upcoming runner deprecation issues
 - README roadmap and installation docs now reflect the live PyPI release and working Trusted Publishing setup
+- Hatch now reads the package version directly from `src/ticktick_cli/__init__.py` to keep CLI output and release metadata aligned
+
+### Fixed
+
+- `ticktick --version` and `ticktick schema` now report the correct released version
 
 ## [0.1.1] - 2026-03-29
 

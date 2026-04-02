@@ -1,0 +1,16 @@
+{
+  "name": "ticktick-cli-marketplace",
+  "owner": {
+    "name": "Oleksandr Tsepukh"
+  },
+  "metadata": {
+    "description": "Community marketplace for the ticktick-cli Claude Code plugin"
+  },
+  "plugins": [
+    {
+      "name": "ticktick-cli",
+      "source": "./claude-plugin/ticktick-cli",
+      "description": "Agent-native TickTick workflows for Claude Code backed by the ticktick CLI"
+    }
+  ]
+}

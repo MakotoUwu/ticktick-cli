@@ -1,0 +1,11 @@
+{
+  "name": "ticktick-cli",
+  "description": "Agent-native TickTick workflows for Claude Code backed by the ticktick CLI",
+  "version": "0.1.1",
+  "author": {
+    "name": "Oleksandr Tsepukh"
+  },
+  "homepage": "https://github.com/MakotoUwu/ticktick-cli",
+  "repository": "https://github.com/MakotoUwu/ticktick-cli",
+  "license": "MIT"
+}

@@ -82,6 +82,26 @@ pipx install ticktick-agent-cli
 
 The published package name is `ticktick-agent-cli`; the installed command remains `ticktick`.
 
+### Claude Code plugin
+
+This repository now includes a marketplace-ready Claude Code plugin bundle under [`claude-plugin/ticktick-cli`](claude-plugin/ticktick-cli).
+
+For local development and testing:
+
+```bash
+claude plugin validate .
+claude plugin validate ./claude-plugin/ticktick-cli
+```
+
+From a Claude Code session started in the repository root:
+
+```text
+/plugin marketplace add .
+/plugin install ticktick-cli@ticktick-cli-marketplace
+```
+
+The plugin provides a reusable TickTick operator Skill plus packaged Claude commands for agenda review and task capture.
+
 ## Quick Start
 
 ### 1. Authenticate
@@ -461,10 +481,11 @@ This is an **unofficial, community-built** CLI. TickTick released their own [`@t
 - [x] Read-only calendar discovery commands (`calendar account list`, `calendar subscription list`, `calendar event list`)
 - [x] Publish package to PyPI
 - [x] Configure Trusted Publishing for repeatable PyPI/TestPyPI releases
+- [x] Package a local Claude Code plugin + marketplace bundle
 
 ### Next
 
-- [ ] Package and submit a Claude Code plugin directory entry
+- [ ] Submit a Claude Code plugin directory entry
 - [ ] Publish native skill distribution for OpenClaw / ClawHub
 - [ ] Homebrew formula
 - [ ] Advanced productivity reports
