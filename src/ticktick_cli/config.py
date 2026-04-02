@@ -5,9 +5,11 @@ Stores config and credentials at ~/.config/ticktick-cli/ (XDG-compliant).
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,24 @@ DEFAULT_CONFIG = {
 }
 
 _PROFILE_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _secure_open(path: Path, flags: int, mode: int = 0o600) -> int:
+    """Open a config/auth file without following symlinks."""
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    open_flags = flags | nofollow
+    try:
+        fd = os.open(str(path), open_flags, mode)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError(f"Refusing to use symlinked config path: {path}") from exc
+        raise
+
+    file_mode = os.fstat(fd).st_mode
+    if not stat.S_ISREG(file_mode):
+        os.close(fd)
+        raise ValueError(f"Refusing to use non-regular config path: {path}")
+    return fd
 
 
 def _validate_profile(profile: str) -> str:
@@ -57,7 +77,8 @@ def load_config(profile: str = "default") -> dict[str, Any]:
     path = get_config_path(profile)
     config = dict(DEFAULT_CONFIG)
     if path.exists():
-        with open(path) as f:
+        fd = _secure_open(path, os.O_RDONLY)
+        with os.fdopen(fd) as f:
             stored = json.load(f)
         config.update(stored)
     return config
@@ -66,7 +87,7 @@ def load_config(profile: str = "default") -> dict[str, Any]:
 def save_config(config: dict[str, Any], profile: str = "default") -> None:
     """Save config to disk with restricted permissions (600)."""
     path = get_config_path(profile)
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = _secure_open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(config, f, indent=2)
 
@@ -76,7 +97,8 @@ def load_auth(profile: str = "default") -> dict[str, Any]:
     path = get_auth_path(profile)
     if not path.exists():
         return {}
-    with open(path) as f:
+    fd = _secure_open(path, os.O_RDONLY)
+    with os.fdopen(fd) as f:
         return json.load(f)
 
 
@@ -87,7 +109,7 @@ def save_auth(auth: dict[str, Any], profile: str = "default") -> None:
     where the file is briefly world-readable before chmod.
     """
     path = get_auth_path(profile)
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = _secure_open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(auth, f, indent=2)
 

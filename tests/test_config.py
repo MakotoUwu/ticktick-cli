@@ -74,6 +74,24 @@ class TestAuth:
         mode = oct(os.stat(auth_path).st_mode)[-3:]
         assert mode == "600"
 
+    def test_save_auth_rejects_symlink_path(self, temp_config: Path) -> None:
+        config_dir = get_config_dir("test")
+        target = config_dir / "target.json"
+        target.write_text("{}")
+        os.symlink(target, config_dir / "auth.json")
+
+        with pytest.raises(ValueError, match="symlinked config path"):
+            save_auth({"v1": {"access_token": "secret"}}, "test")
+
+    def test_load_auth_rejects_symlink_path(self, temp_config: Path) -> None:
+        config_dir = get_config_dir("test")
+        target = config_dir / "target.json"
+        target.write_text('{"v1": {"access_token": "secret"}}')
+        os.symlink(target, config_dir / "auth.json")
+
+        with pytest.raises(ValueError, match="symlinked config path"):
+            load_auth("test")
+
     def test_clear_auth(self, temp_config: Path) -> None:
         save_auth({"v1": {"access_token": "token"}}, "test")
         clear_auth("test")
