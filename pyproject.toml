@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ticktick-agent-cli"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Agent-native CLI for TickTick task management — full API coverage via V1 + V2"
 readme = "README.md"
 license = "MIT"
@@ -49,6 +49,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ticktick_cli"]
+
+[tool.hatch.version]
+path = "src/ticktick_cli/__init__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

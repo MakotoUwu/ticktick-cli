@@ -7,13 +7,14 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
+from ticktick_cli import __version__
 from ticktick_cli.cli import cli
 
 
 def test_version_flag(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert __version__ in result.output
 
 
 def test_version_command(runner: CliRunner) -> None:
@@ -21,13 +22,13 @@ def test_version_command(runner: CliRunner) -> None:
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["ok"] is True
-    assert data["data"]["version"] == "0.1.0"
+    assert data["data"]["version"] == __version__
 
 
 def test_version_human(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["--human", "version"])
     assert result.exit_code == 0
-    assert "ticktick-cli v0.1.0" in result.output
+    assert f"ticktick-cli v{__version__}" in result.output
 
 
 def test_help(runner: CliRunner) -> None:
