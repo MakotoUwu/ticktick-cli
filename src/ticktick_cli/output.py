@@ -353,6 +353,7 @@ def _print_table(
     """Print items as a rich table."""
     from rich.console import Console
     from rich.table import Table
+    from rich.text import Text
 
     if not items:
         Console().print("[dim]No results.[/dim]")
@@ -366,7 +367,7 @@ def _print_table(
         table.add_column(col, overflow="fold")
 
     for item in items:
-        row = [str(item.get(col, "")) for col in columns]
+        row = [Text(str(item.get(col, ""))) for col in columns]
         table.add_row(*row)
 
     Console().print(table)
@@ -376,13 +377,14 @@ def _print_detail(item: dict[str, Any]) -> None:
     """Print a single item as key-value pairs."""
     from rich.console import Console
     from rich.table import Table
+    from rich.text import Text
 
     table = Table(show_header=False, box=None)
     table.add_column("Key", style="bold cyan")
     table.add_column("Value")
 
     for key, value in item.items():
-        table.add_row(key, str(value))
+        table.add_row(Text(str(key)), Text(str(value)))
 
     Console().print(table)
 
@@ -395,5 +397,6 @@ def _print_human(data: Any) -> None:
         _print_detail(data)
     else:
         from rich.console import Console
+        from rich.text import Text
 
-        Console().print(str(data))
+        Console().print(Text(str(data)))

@@ -126,6 +126,18 @@ class TestHumanOutput:
         captured = capsys.readouterr()
         assert "No results" in captured.out
 
+    def test_output_item_human_escapes_markup(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(human=True)
+        output_item({"id": "task1", "title": "[red]owned[/red]"}, ctx)
+        captured = capsys.readouterr()
+        assert "[red]owned[/red]" in captured.out
+
+    def test_output_list_human_escapes_markup(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(human=True)
+        output_list([{"id": "1", "name": "[red]owned[/red]"}], columns=["id", "name"], ctx=ctx)
+        captured = capsys.readouterr()
+        assert "[red]owned[/red]" in captured.out
+
 
 class TestFieldsFilter:
     def test_fields_filter_item(self, capsys: pytest.CaptureFixture) -> None:
