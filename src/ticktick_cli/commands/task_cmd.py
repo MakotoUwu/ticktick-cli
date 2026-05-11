@@ -42,6 +42,7 @@ def _format_task(task: dict[str, Any]) -> dict[str, Any]:
         "parentId": task.get("parentId"),
         "columnId": task.get("columnId"),
         "pinnedTime": task.get("pinnedTime"),
+        "sortOrder": task.get("sortOrder"),
         "items": task.get("items", []),  # subtask checklist items
     }
 
@@ -160,7 +161,7 @@ def task_add(
 @click.option("--priority", type=click.Choice(["none", "low", "medium", "high"]), default=None)
 @click.option("--due", default=None, help="Filter: today, overdue, this-week, YYYY-MM-DD")
 @click.option("--tag", "-t", multiple=True, help="Filter by tag")
-@click.option("--sort", type=click.Choice(["due", "priority", "title", "created"]), default="due")
+@click.option("--sort", type=click.Choice(["due", "priority", "title", "created", "sortOrder"]), default="due")
 @click.option("--limit", "-n", type=int, default=50, help="Max results")
 @click.pass_context
 def task_list(
@@ -727,6 +728,7 @@ def _sort_tasks(tasks: list[dict], sort_key: str) -> list[dict]:
         "priority": lambda t: -t.get("priority", 0),
         "title": lambda t: t.get("title", "").lower(),
         "created": lambda t: t.get("createdTime") or "",
+        "sortOrder": lambda t: (t.get("sortOrder") is None, t.get("sortOrder") or 0),
     }
     return sorted(tasks, key=key_map.get(sort_key, key_map["due"]))
 
