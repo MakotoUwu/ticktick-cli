@@ -8,18 +8,31 @@ Endpoints: everything the web app uses — tasks, projects, tags, habits, focus,
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import time
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
+
+import httpx
 
 from ticktick_cli.api.base import BaseClient
 
 V2_BASE = "https://api.ticktick.com/api/v2"
+V1_BASE = "https://api.ticktick.com/api/v1"
 
 # Minimal headers that make V2 API work (from pyticktick)
 V2_USER_AGENT = "Mozilla/5.0 (rv:145.0) Firefox/145.0"
 V2_DEVICE_VERSION = 6430
+
+_IMAGE_EXTENSIONS = {
+    "avif", "bmp", "gif", "heic", "heif", "jpeg", "jpg", "png", "svg", "tif", "tiff", "webp",
+}
+_VIDEO_EXTENSIONS = {"avi", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "webm", "wmv"}
+_AUDIO_EXTENSIONS = {"aac", "flac", "m4a", "mp3", "ogg", "wav", "wma"}
+_PACKAGE_EXTENSIONS = {"7z", "gz", "rar", "tar", "tgz", "zip"}
 
 
 def _generate_object_id() -> str:
@@ -28,6 +41,39 @@ def _generate_object_id() -> str:
     random_bytes = os.urandom(5)
     counter = os.urandom(3)
     return (timestamp + random_bytes + counter).hex()
+
+
+def _infer_attachment_file_type(path: Path, mime_type: str | None = None) -> str:
+    """Infer TickTick's attachment fileType value from the filename and MIME type."""
+    ext = path.suffix.lower().lstrip(".")
+    if ext in _IMAGE_EXTENSIONS or (mime_type and mime_type.startswith("image/")):
+        return "IMAGE"
+    if ext in _VIDEO_EXTENSIONS or (mime_type and mime_type.startswith("video/")):
+        return "VIDEO"
+    if ext in _AUDIO_EXTENSIONS or (mime_type and mime_type.startswith("audio/")):
+        return "AUDIO"
+    if ext == "pdf":
+        return "PDF"
+    if ext in _PACKAGE_EXTENSIONS:
+        return "PACKAGE"
+    if ext:
+        return ext.upper()
+    return mime_type or "unknown"
+
+
+def _format_attachment_markdown(attachment_id: str, file_type: str, file_name: str) -> str:
+    """Return the inline marker used by TickTick's web editor for task attachments."""
+    label = "image" if "image" in file_type.lower() else "file"
+    return f"![{label}]({attachment_id}/{quote(file_name, safe='')})"
+
+
+def _append_attachment_markdown(content: str, markdown: str) -> str:
+    """Append an attachment marker with the same line separation the web app uses."""
+    if not content:
+        return markdown
+    if content.endswith("\n"):
+        return f"{content}{markdown}"
+    return f"{content}\n{markdown}"
 
 
 class V2Client(BaseClient):
@@ -119,19 +165,131 @@ class V2Client(BaseClient):
         add: list[dict] | None = None,
         update: list[dict] | None = None,
         delete: list[dict] | None = None,
+        add_attachments: list[dict] | None = None,
+        update_attachments: list[dict] | None = None,
+        delete_attachments: list[dict] | None = None,
     ) -> dict[str, Any]:
         data = {
             "add": add or [],
             "update": update or [],
             "delete": delete or [],
-            "addAttachments": [],
-            "updateAttachments": [],
-            "deleteAttachments": [],
+            "addAttachments": add_attachments or [],
+            "updateAttachments": update_attachments or [],
+            "deleteAttachments": delete_attachments or [],
         }
         return self.post("/batch/task", json_data=data)
 
     def get_task(self, task_id: str) -> dict[str, Any]:
         return self.get(f"/task/{task_id}")
+
+    def build_task_attachment(
+        self,
+        task_id: str,
+        project_id: str,
+        file_path: str | Path,
+        *,
+        attachment_id: str | None = None,
+        file_type: str | None = None,
+    ) -> dict[str, Any]:
+        """Build the attachment metadata shape used by TickTick web."""
+        path = Path(file_path).expanduser()
+        mime_type = mimetypes.guess_type(path.name)[0]
+        att_id = attachment_id or _generate_object_id()
+        return {
+            "id": att_id,
+            "refId": att_id,
+            "projectId": project_id,
+            "taskId": task_id,
+            "fileName": path.name,
+            "fileType": file_type or _infer_attachment_file_type(path, mime_type),
+            "size": path.stat().st_size,
+        }
+
+    def upload_task_attachment(
+        self,
+        project_id: str,
+        task_id: str,
+        attachment_id: str,
+        file_path: str | Path,
+    ) -> dict[str, Any]:
+        """Upload a task attachment file through TickTick's V1 attachment endpoint."""
+        path = Path(file_path).expanduser()
+        endpoint = f"/attachment/upload/{project_id}/{task_id}/{attachment_id}"
+        headers = self._get_auth_headers()
+        csrf_token = self._cookies.get("_csrf_token")
+        if csrf_token:
+            headers["X-Csrftoken"] = csrf_token
+
+        mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        with path.open("rb") as file_obj:
+            response = httpx.post(
+                f"{V1_BASE}{endpoint}",
+                headers=headers,
+                files={"file": (path.name, file_obj, mime_type)},
+                timeout=30.0,
+            )
+        return self._handle_response(response, f"/api/v1{endpoint}")
+
+    def add_task_attachment(
+        self,
+        task_id: str,
+        file_path: str | Path,
+        *,
+        project_id: str | None = None,
+        insert_content_link: bool = True,
+        file_type: str | None = None,
+    ) -> dict[str, Any]:
+        """Upload a file and attach it to a task, optionally inserting the inline marker."""
+        task = self.get_task(task_id)
+        resolved_project_id = project_id or task.get("projectId", "")
+        attachment = self.build_task_attachment(
+            task_id,
+            resolved_project_id,
+            file_path,
+            file_type=file_type,
+        )
+        upload_result = self.upload_task_attachment(
+            resolved_project_id,
+            task_id,
+            attachment["id"],
+            file_path,
+        )
+        if isinstance(upload_result, dict):
+            server_metadata = {
+                key: value
+                for key, value in upload_result.items()
+                if key not in {"id", "taskId"} and value is not None
+            }
+            attachment.update(server_metadata)
+
+        markdown = _format_attachment_markdown(
+            attachment["id"],
+            attachment.get("fileType", ""),
+            attachment.get("fileName", ""),
+        )
+        updates: list[dict[str, Any]] = []
+        if insert_content_link:
+            current_content = task.get("content") or ""
+            updates.append({
+                "id": task_id,
+                "projectId": resolved_project_id,
+                "content": _append_attachment_markdown(current_content, markdown),
+            })
+
+        self.batch_tasks(
+            update=updates,
+            add_attachments=[{
+                "id": task_id,
+                "projectId": resolved_project_id,
+                "attachments": [attachment],
+            }],
+        )
+        return {
+            "attachment": attachment,
+            "markdown": markdown if insert_content_link else None,
+            "contentLinked": insert_content_link,
+            "upload": upload_result,
+        }
 
     def move_tasks(self, moves: list[dict]) -> Any:
         """Move tasks between projects. Each: {taskId, fromProjectId, toProjectId}."""

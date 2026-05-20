@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import click
 
-from ticktick_cli.api.v2 import _generate_object_id
+from ticktick_cli.api.v2 import (
+    _format_attachment_markdown,
+    _generate_object_id,
+    _infer_attachment_file_type,
+)
 from ticktick_cli.auth import get_client
 from ticktick_cli.dates import parse_date
 from ticktick_cli.models.comment import Activity, Comment
@@ -43,6 +48,20 @@ def _format_task(task: dict[str, Any]) -> dict[str, Any]:
         "columnId": task.get("columnId"),
         "pinnedTime": task.get("pinnedTime"),
         "items": task.get("items", []),  # subtask checklist items
+    }
+
+
+def _format_attachment(attachment: dict[str, Any]) -> dict[str, Any]:
+    """Normalize attachment dict for output."""
+    return {
+        "id": attachment.get("id", ""),
+        "refId": attachment.get("refId", ""),
+        "taskId": attachment.get("taskId", ""),
+        "projectId": attachment.get("projectId", ""),
+        "fileName": attachment.get("fileName", ""),
+        "fileType": attachment.get("fileType", ""),
+        "size": attachment.get("size", 0),
+        "path": attachment.get("path"),
     }
 
 
@@ -529,6 +548,94 @@ def task_batch_add(ctx: click.Context, filepath: str) -> None:
             tasks = [tasks]
         client.v2.batch_tasks(add=tasks)
         output_message(f"Created {len(tasks)} task(s) from {filepath}.", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+# ── Attachment subgroup ───────────────────────────────────────
+
+
+@task_group.group("attachment")
+def attachment_group() -> None:
+    """Manage task attachments."""
+
+
+@attachment_group.command("list")
+@click.argument("task_id")
+@click.pass_context
+def attachment_list(ctx: click.Context, task_id: str) -> None:
+    """List attachments on a task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        task = client.v2.get_task(task_id)
+        attachments = [_format_attachment(a) for a in task.get("attachments", [])]
+        output_list(
+            attachments,
+            columns=["id", "fileName", "fileType", "size", "path"],
+            title="Attachments",
+            ctx=ctx,
+        )
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@attachment_group.command("add")
+@click.argument("task_id")
+@click.argument("file_path", type=click.Path(exists=True, dir_okay=False, readable=True))
+@click.option("--project", "project_id", default=None, help="Project ID (auto-detected if omitted)")
+@click.option("--file-type", default=None, help="Override TickTick fileType, e.g. IMAGE or PDF")
+@click.option(
+    "--no-content-link",
+    is_flag=True,
+    help="Attach the file without appending TickTick's inline markdown marker.",
+)
+@click.pass_context
+def attachment_add(
+    ctx: click.Context,
+    task_id: str,
+    file_path: str,
+    project_id: str | None,
+    file_type: str | None,
+    no_content_link: bool,
+) -> None:
+    """Upload and attach a file to a task."""
+    path = Path(file_path).expanduser()
+    inferred_file_type = file_type or _infer_attachment_file_type(path)
+    insert_content_link = not no_content_link
+    dry_run_id = _generate_object_id()
+    details = {
+        "task_id": task_id,
+        "project_id": project_id,
+        "file": str(path),
+        "fileName": path.name,
+        "fileType": inferred_file_type,
+        "size": path.stat().st_size,
+        "insert_content_link": insert_content_link,
+        "markdown": (
+            _format_attachment_markdown(dry_run_id, inferred_file_type, path.name)
+            if insert_content_link
+            else None
+        ),
+    }
+    if is_dry_run(ctx):
+        output_dry_run("task.attachment.add", details, ctx)
+        return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        result = client.v2.add_task_attachment(
+            task_id,
+            str(path),
+            project_id=project_id,
+            insert_content_link=insert_content_link,
+            file_type=file_type,
+        )
+        attachment = _format_attachment(result.get("attachment", {}))
+        attachment["markdown"] = result.get("markdown")
+        attachment["contentLinked"] = result.get("contentLinked", False)
+        output_item(attachment, ctx, message="Attachment added.")
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
