@@ -60,6 +60,16 @@ class TestCommentModel:
         assert c.user_profile.is_myself is True
         assert c.user_profile.name == "Bob"
 
+    def test_nullable_collections_from_api(self) -> None:
+        c = Comment(
+            id="comment1",
+            title="This is a comment",
+            mentions=None,
+            attachments=None,
+        )
+        assert c.mentions == []
+        assert c.attachments == []
+
     def test_to_output_basic(self) -> None:
         c = Comment(id="c1", title="hello", createdTime="2026-01-01T00:00:00.000+0000")
         out = c.to_output()
@@ -197,6 +207,8 @@ class TestCommentList:
                 "id": "c1",
                 "title": "First comment",
                 "createdTime": "2026-03-12T10:00:00.000+0000",
+                "mentions": None,
+                "attachments": None,
             },
             {
                 "id": "c2",
