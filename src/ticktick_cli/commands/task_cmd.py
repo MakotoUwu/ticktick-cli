@@ -11,6 +11,7 @@ from ticktick_cli.api.v2 import _generate_object_id
 from ticktick_cli.auth import get_client
 from ticktick_cli.dates import parse_date
 from ticktick_cli.models.comment import Activity, Comment
+from ticktick_cli.models.task import Task
 from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
@@ -28,23 +29,26 @@ _FETCH_ALL_LIMIT = 10_000
 
 def _format_task(task: dict[str, Any]) -> dict[str, Any]:
     """Normalize task dict for output."""
-    return {
-        "id": task.get("id", ""),
-        "title": task.get("title", ""),
-        "status": "completed" if task.get("status", 0) >= 2 else "active",
-        "priority": PRIORITY_REVERSE.get(task.get("priority", 0), "none"),
-        "projectId": task.get("projectId", ""),
-        "dueDate": task.get("dueDate", ""),
-        "startDate": task.get("startDate", ""),
-        "tags": task.get("tags", []),
-        "content": task.get("content", ""),
-        "isAllDay": task.get("isAllDay", False),
-        "parentId": task.get("parentId"),
-        "columnId": task.get("columnId"),
-        "pinnedTime": task.get("pinnedTime"),
-        "sortOrder": task.get("sortOrder"),
-        "items": task.get("items", []),  # subtask checklist items
-    }
+    try:
+        return Task(**task).to_output()
+    except Exception:
+        return {
+            "id": task.get("id", ""),
+            "title": task.get("title", ""),
+            "status": "completed" if task.get("status", 0) >= 2 else "active",
+            "priority": PRIORITY_REVERSE.get(task.get("priority", 0), "none"),
+            "projectId": task.get("projectId", ""),
+            "dueDate": task.get("dueDate", ""),
+            "startDate": task.get("startDate", ""),
+            "tags": task.get("tags", []),
+            "content": task.get("content", ""),
+            "isAllDay": task.get("isAllDay", False),
+            "parentId": task.get("parentId"),
+            "columnId": task.get("columnId"),
+            "pinnedTime": task.get("pinnedTime"),
+            "sortOrder": task.get("sortOrder"),
+            "items": task.get("items", []),  # subtask checklist items
+        }
 
 
 def _request_page_limit(ctx: click.Context, limit: int) -> int:
@@ -390,9 +394,19 @@ def task_move(ctx: click.Context, task_id: str, project: str) -> None:
 @task_group.command("search")
 @click.argument("query")
 @click.option("--limit", "-n", type=int, default=20)
+@click.option("--project", "-p", default=None, help="Filter by project name or ID")
+@click.option("--tag", "-t", multiple=True, help="Filter by tag")
+@click.option("--priority", type=click.Choice(["none", "low", "medium", "high"]), default=None)
 @click.pass_context
-def task_search(ctx: click.Context, query: str, limit: int) -> None:
-    """Search tasks by text (searches title and content)."""
+def task_search(
+    ctx: click.Context,
+    query: str,
+    limit: int,
+    project: str | None,
+    tag: tuple[str, ...],
+    priority: str | None,
+) -> None:
+    """Search tasks by text with optional filters."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         tasks = client.get_all_tasks()
@@ -402,6 +416,15 @@ def task_search(ctx: click.Context, query: str, limit: int) -> None:
             for t in tasks
             if q in t.get("title", "").lower() or q in t.get("content", "").lower()
         ]
+        if project:
+            pid = _resolve_project_id(client, project)
+            matches = [t for t in matches if t.get("projectId") == pid]
+        if priority:
+            p = PRIORITY_MAP[priority]
+            matches = [t for t in matches if t.get("priority", 0) == p]
+        if tag:
+            tag_set = set(tag)
+            matches = [t for t in matches if tag_set.intersection(set(t.get("tags", [])))]
         formatted = [_format_task(t) for t in matches]
         output_list(
             formatted,
