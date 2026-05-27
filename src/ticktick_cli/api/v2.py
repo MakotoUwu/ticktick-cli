@@ -182,6 +182,10 @@ class V2Client(BaseClient):
     def get_task(self, task_id: str) -> dict[str, Any]:
         return self.get(f"/task/{task_id}")
 
+    def skip_task_recurrence(self, update: dict[str, Any]) -> dict[str, Any]:
+        """Skip recurring task occurrences by updating TickTick's exDate list."""
+        return self.batch_tasks(update=[update])
+
     def build_task_attachment(
         self,
         task_id: str,

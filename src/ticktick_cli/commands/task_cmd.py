@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import click
 
@@ -29,6 +30,20 @@ from ticktick_cli.output import (
 PRIORITY_MAP = {"none": 0, "low": 1, "medium": 3, "high": 5}
 PRIORITY_REVERSE = {0: "none", 1: "low", 3: "medium", 5: "high"}
 _FETCH_ALL_LIMIT = 10_000
+_TICKTICK_DATETIME_FORMATS = (
+    "%Y-%m-%dT%H:%M:%S.%f%z",
+    "%Y-%m-%dT%H:%M:%S%z",
+)
+_RECURRENCE_SKIP_PRESERVE_FIELDS = (
+    "repeatFlag",
+    "repeatFrom",
+    "dueDate",
+    "startDate",
+    "timeZone",
+    "isAllDay",
+    "reminder",
+    "reminders",
+)
 
 
 def _format_task(task: dict[str, Any]) -> dict[str, Any]:
@@ -72,6 +87,81 @@ def _request_page_limit(ctx: click.Context, limit: int) -> int:
     if fetch_all:
         return max(limit + offset, _FETCH_ALL_LIMIT)
     return limit + offset
+
+
+def _parse_ticktick_datetime(value: str) -> datetime:
+    """Parse TickTick's datetime strings, including compact numeric offsets."""
+    normalized = value.strip()
+    if len(normalized) >= 5 and normalized[-5] in ("+", "-") and ":" not in normalized[-5:]:
+        normalized = f"{normalized[:-2]}:{normalized[-2:]}"
+    for fmt in _TICKTICK_DATETIME_FORMATS:
+        try:
+            return datetime.strptime(normalized, fmt)
+        except ValueError:
+            continue
+    return datetime.fromisoformat(normalized)
+
+
+def _normalize_ex_date(date_value: str) -> str:
+    """Convert a user date token into TickTick's recurrence exception stamp."""
+    token = date_value.strip()
+    if len(token) == 8 and token.isdigit():
+        return token
+    parsed = parse_date(token)
+    return _parse_ticktick_datetime(parsed).strftime("%Y%m%d")
+
+
+def _task_ex_date(task: dict[str, Any], occurrence_date: str | None) -> str:
+    """Return the recurrence exception date for a task occurrence."""
+    if occurrence_date:
+        return _normalize_ex_date(occurrence_date)
+
+    raw_date = task.get("dueDate") or task.get("startDate")
+    if not raw_date:
+        raise ValueError("Recurring task has no dueDate/startDate to skip. Pass --date YYYY-MM-DD.")
+
+    dt = _parse_ticktick_datetime(raw_date)
+    timezone_name = task.get("timeZone")
+    if timezone_name:
+        try:
+            dt = dt.astimezone(ZoneInfo(timezone_name))
+        except ZoneInfoNotFoundError:
+            pass
+    return dt.strftime("%Y%m%d")
+
+
+def _build_skip_recurrence_update(
+    task: dict[str, Any],
+    occurrence_date: str | None = None,
+) -> tuple[dict[str, Any], str, bool]:
+    """Build the V2 update payload for skipping one recurring occurrence."""
+    if not task.get("repeatFlag"):
+        raise ValueError("Task is not recurring; skip is only available for tasks with repeatFlag.")
+
+    task_id = task.get("id")
+    project_id = task.get("projectId")
+    if not task_id or not project_id:
+        raise ValueError("Task is missing id/projectId and cannot be updated through V2.")
+
+    ex_date = _task_ex_date(task, occurrence_date)
+    existing = [str(value) for value in (task.get("exDate") or [])]
+    seen: set[str] = set()
+    ex_dates = []
+    for value in existing:
+        if value not in seen:
+            ex_dates.append(value)
+            seen.add(value)
+
+    already_skipped = ex_date in seen
+    if not already_skipped:
+        ex_dates.append(ex_date)
+
+    update = {"id": task_id, "projectId": project_id}
+    for field in _RECURRENCE_SKIP_PRESERVE_FIELDS:
+        if field in task:
+            update[field] = task[field]
+    update["exDate"] = ex_dates
+    return update, ex_date, already_skipped
 
 
 @click.group("task")
@@ -349,6 +439,44 @@ def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
             updates.append({"id": tid, "projectId": task["projectId"], "status": -1})
         client.v2.batch_tasks(update=updates)
         output_message(f"Abandoned {len(task_ids)} task(s).", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@task_group.command("skip")
+@click.argument("task_id")
+@click.option("--date", "occurrence_date", default=None, help="Occurrence date to skip (default: task due date)")
+@click.pass_context
+def task_skip(ctx: click.Context, task_id: str, occurrence_date: str | None) -> None:
+    """Skip one occurrence of a recurring task (V2)."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        if not client.has_v2:
+            raise ValueError("Skipping recurring task occurrences requires V2 authentication.")
+
+        task = client.v2.get_task(task_id)
+        update, ex_date, already_skipped = _build_skip_recurrence_update(task, occurrence_date)
+        details = {
+            "id": task_id,
+            "title": task.get("title", ""),
+            "projectId": update["projectId"],
+            "exDate": ex_date,
+            "repeatFlag": task.get("repeatFlag", ""),
+            "alreadySkipped": already_skipped,
+            "payload": update,
+        }
+
+        if is_dry_run(ctx):
+            output_dry_run("task.skip", details, ctx)
+            return
+
+        if already_skipped:
+            output_item(details, ctx, message=f"Task occurrence {ex_date} was already skipped.")
+            return
+
+        client.v2.skip_task_recurrence(update)
+        output_item(details, ctx, message=f"Skipped recurrence {ex_date} for task {task_id}.")
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

@@ -117,6 +117,67 @@ class TestTaskDone:
         assert "Completed 1 task(s)" in data["message"]
 
 
+class TestTaskSkip:
+    def test_skip_recurring_occurrence(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.v2.get_task.return_value = {
+            "id": "task1",
+            "title": "Wake up",
+            "projectId": "proj1",
+            "status": 0,
+            "repeatFlag": "RRULE:FREQ=DAILY;INTERVAL=1",
+            "dueDate": "2026-05-27T04:30:00.000+0000",
+            "timeZone": "Europe/Brussels",
+            "exDate": [],
+        }
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "skip", "task1"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["ok"] is True
+        assert "Skipped recurrence 20260527" in data["message"]
+        assert data["data"]["exDate"] == "20260527"
+        update = mock_client.v2.skip_task_recurrence.call_args.args[0]
+        assert update["id"] == "task1"
+        assert update["projectId"] == "proj1"
+        assert update["repeatFlag"] == "RRULE:FREQ=DAILY;INTERVAL=1"
+        assert update["dueDate"] == "2026-05-27T04:30:00.000+0000"
+        assert update["timeZone"] == "Europe/Brussels"
+        assert update["exDate"] == ["20260527"]
+
+    def test_skip_dry_run_shows_payload(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.v2.get_task.return_value = {
+            "id": "task1",
+            "title": "Wake up",
+            "projectId": "proj1",
+            "repeatFlag": "RRULE:FREQ=DAILY;INTERVAL=1",
+            "dueDate": "2026-05-27T04:30:00.000+0000",
+            "exDate": ["20260526"],
+        }
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["--dry-run", "task", "skip", "task1", "--date", "2026-05-27"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+        assert data["action"] == "task.skip"
+        assert data["details"]["payload"]["exDate"] == ["20260526", "20260527"]
+        assert data["details"]["payload"]["repeatFlag"] == "RRULE:FREQ=DAILY;INTERVAL=1"
+        mock_client.v2.skip_task_recurrence.assert_not_called()
+
+    def test_skip_rejects_non_recurring_task(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.v2.get_task.return_value = {
+            "id": "task1",
+            "title": "One-off",
+            "projectId": "proj1",
+            "dueDate": "2026-05-27T04:30:00.000+0000",
+            "exDate": [],
+        }
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "skip", "task1"])
+        assert result.exit_code == 1
+        assert "not recurring" in result.stderr
+        mock_client.v2.skip_task_recurrence.assert_not_called()
+
+
 class TestTaskDelete:
     def test_delete_with_yes_flag(self, runner: CliRunner, mock_client: MagicMock) -> None:
         with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):

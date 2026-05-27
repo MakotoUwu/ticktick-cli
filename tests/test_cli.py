@@ -63,7 +63,7 @@ def test_task_subcommands(runner: CliRunner) -> None:
     assert result.exit_code == 0
     expected = [
         "add", "list", "show", "edit", "done", "abandon",
-        "delete", "move", "search", "today", "overdue",
+        "skip", "delete", "move", "search", "today", "overdue",
         "completed", "trash", "pin", "unpin", "batch-add",
     ]
     for cmd in expected:
