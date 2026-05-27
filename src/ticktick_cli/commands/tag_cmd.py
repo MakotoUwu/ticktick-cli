@@ -130,9 +130,12 @@ def tag_rename(ctx: click.Context, old_name: str, new_name: str) -> None:
 @tag_group.command("merge")
 @click.argument("source")
 @click.argument("target")
+@click.option("--yes", is_flag=True, help="Skip confirmation")
 @click.pass_context
-def tag_merge(ctx: click.Context, source: str, target: str) -> None:
+def tag_merge(ctx: click.Context, source: str, target: str, yes: bool) -> None:
     """Merge one tag into another (source is deleted)."""
+    if not yes:
+        click.confirm(f"Merge tag '{source}' into '{target}' and delete '{source}'?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         client.v2.merge_tags(source, target)

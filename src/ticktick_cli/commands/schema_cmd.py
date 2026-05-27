@@ -198,8 +198,6 @@ def _command_metadata(command: str, params: list[dict[str, Any]]) -> dict[str, A
     mutates = normalized in _MUTATING_COMMANDS
     destructive = normalized in _DESTRUCTIVE_COMMANDS
     supports_dry_run = normalized in _DRY_RUN_COMMANDS
-    has_yes_flag = any(p.get("name") == "yes" for p in params)
-
     if normalized in _NO_AUTH_COMMANDS:
         auth_api = "none"
     elif normalized in _EITHER_API_COMMANDS:
@@ -214,7 +212,7 @@ def _command_metadata(command: str, params: list[dict[str, Any]]) -> dict[str, A
             "mutates": mutates,
             "destructive": destructive,
             "supports_dry_run": supports_dry_run,
-            "requires_confirmation": destructive and has_yes_flag,
+            "requires_confirmation": destructive,
             "auth_api": auth_api,
             "requires_auth": auth_api != "none",
         }

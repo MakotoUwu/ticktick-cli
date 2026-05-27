@@ -500,7 +500,7 @@ class TestFocusDelete:
 
         runner = CliRunner()
         result = runner.invoke(
-            focus_group, ["delete", "abc123"], obj=_make_ctx()
+            focus_group, ["delete", "abc123", "--yes"], obj=_make_ctx()
         )
         assert result.exit_code == 0
         client.v2.delete_pomodoro.assert_called_once_with("abc123")
@@ -513,6 +513,15 @@ class TestFocusDelete:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["dry_run"] is True
+
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_delete_aborts_without_yes(self, mock_get: MagicMock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            focus_group, ["delete", "abc123"], obj=_make_ctx(), input="n\n"
+        )
+        assert result.exit_code != 0
+        mock_get.assert_not_called()
 
 
 class TestFocusStats:

@@ -81,6 +81,10 @@ class TestSchemaCommand:
         assert task_delete["agent"]["destructive"] is True
         assert task_delete["agent"]["requires_confirmation"] is True
 
+        destructive = [c for c in commands if c["agent"]["destructive"]]
+        assert destructive
+        assert all(c["agent"]["requires_confirmation"] is True for c in destructive)
+
         task_list = next(c for c in commands if c["command"].endswith("task list"))
         assert task_list["agent"]["mutates"] is False
         assert task_list["agent"]["requires_auth"] is True

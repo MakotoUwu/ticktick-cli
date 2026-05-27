@@ -294,7 +294,7 @@ class TestCommentDelete:
         runner = CliRunner()
         result = runner.invoke(
             task_group,
-            ["comment", "delete", "task1", "comment1"],
+            ["comment", "delete", "task1", "comment1", "--yes"],
             obj=_make_ctx(),
         )
         assert result.exit_code == 0
@@ -312,7 +312,7 @@ class TestCommentDelete:
         runner = CliRunner()
         result = runner.invoke(
             task_group,
-            ["comment", "delete", "task1", "comment1", "--project", "proj99"],
+            ["comment", "delete", "task1", "comment1", "--project", "proj99", "--yes"],
             obj=_make_ctx(),
         )
         assert result.exit_code == 0
@@ -332,6 +332,18 @@ class TestCommentDelete:
         assert data["dry_run"] is True
         assert data["action"] == "task.comment.delete"
         _mock_get.assert_not_called()
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_delete_aborts_without_yes(self, mock_get: MagicMock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            task_group,
+            ["comment", "delete", "task1", "comment1"],
+            obj=_make_ctx(),
+            input="n\n",
+        )
+        assert result.exit_code != 0
+        mock_get.assert_not_called()
 
 
 class TestTaskActivity:

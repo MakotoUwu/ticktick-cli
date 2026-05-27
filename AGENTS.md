@@ -98,7 +98,7 @@ ticktick tag list
 ticktick tag create "NAME" [--color "#HEX"]
 ticktick tag edit "NAME" [--label "NEW"] [--color "#HEX"]
 ticktick tag rename "OLD" "NEW"
-ticktick tag merge "SOURCE" "TARGET"
+ticktick tag merge "SOURCE" "TARGET" --yes
 ticktick tag delete "NAME" --yes
 ```
 
@@ -118,7 +118,7 @@ ticktick focus start [--duration 25] [--note "deep work"] [--task TASK_ID]  # St
 ticktick focus stop [--save/--no-save]                         # Stop timer
 ticktick focus status                                          # Current timer state
 ticktick focus log --start HH:MM --end HH:MM [--note "note"]  # Log past session
-ticktick focus delete POMODORO_ID                              # Delete record
+ticktick focus delete POMODORO_ID --yes                        # Delete record
 ticktick focus stats                                           # Today/total counts
 ticktick focus heatmap [--days N]                              # Daily focus heatmap
 ticktick focus by-tag [--days N]                               # Focus time by tag

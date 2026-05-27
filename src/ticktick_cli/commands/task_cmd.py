@@ -854,12 +854,16 @@ def comment_add(ctx: click.Context, task_id: str, text: str, project_id: str | N
 @click.argument("task_id")
 @click.argument("comment_id")
 @click.option("--project", "project_id", default=None, help="Project ID (auto-detected if omitted)")
+@click.option("--yes", is_flag=True, help="Skip confirmation")
 @click.pass_context
-def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id: str | None) -> None:
+def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id: str | None, yes: bool) -> None:
     """Delete a comment from a task."""
     if is_dry_run(ctx):
         output_dry_run("task.comment.delete", {"comment_id": comment_id}, ctx)
         return
+
+    if not yes:
+        click.confirm(f"Delete comment {comment_id} from task {task_id}?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         if not project_id:
