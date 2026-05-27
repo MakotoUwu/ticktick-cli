@@ -121,6 +121,9 @@ def _task_ex_date(task: dict[str, Any], occurrence_date: str | None) -> str:
         raise ValueError("Recurring task has no dueDate/startDate to skip. Pass --date YYYY-MM-DD.")
 
     dt = _parse_ticktick_datetime(raw_date)
+    if task.get("isAllDay") or "T" not in raw_date:
+        return dt.strftime("%Y%m%d")
+
     timezone_name = task.get("timeZone")
     if timezone_name:
         try:

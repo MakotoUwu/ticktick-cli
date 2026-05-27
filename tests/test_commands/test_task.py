@@ -153,6 +153,28 @@ class TestTaskSkip:
         assert update["timeZone"] == "Europe/Brussels"
         assert update["exDate"] == ["20260527"]
 
+    def test_skip_all_day_occurrence_preserves_calendar_date(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.v2.get_task.return_value = {
+            "id": "task1",
+            "title": "All-day recurring task",
+            "projectId": "proj1",
+            "status": 0,
+            "repeatFlag": "RRULE:FREQ=DAILY;INTERVAL=1",
+            "dueDate": "2026-05-27T00:00:00.000+0000",
+            "timeZone": "America/New_York",
+            "isAllDay": True,
+            "exDate": [],
+        }
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "skip", "task1"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"]["exDate"] == "20260527"
+        update = mock_client.v2.skip_task_recurrence.call_args.args[0]
+        assert update["exDate"] == ["20260527"]
+
     def test_skip_dry_run_shows_payload(self, runner: CliRunner, mock_client: MagicMock) -> None:
         mock_client.v2.get_task.return_value = {
             "id": "task1",
