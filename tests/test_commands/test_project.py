@@ -38,7 +38,7 @@ class TestProjectCreate:
     def test_create_project_v2_lookup_failure_still_reports_created(
         self, runner: CliRunner, mock_client: MagicMock
     ) -> None:
-        mock_client.v2.batch_projects.return_value = {}
+        mock_client.v2.batch_projects.return_value = {"id2etag": {}}
         mock_client.list_projects.side_effect = Exception("temporary read failure")
         with patch("ticktick_cli.commands.project_cmd.get_client", return_value=mock_client):
             result = runner.invoke(cli, ["project", "create", "My Project"])
@@ -46,6 +46,16 @@ class TestProjectCreate:
         data = json.loads(result.output)
         assert data["data"]["name"] == "My Project"
         assert "id" not in data["data"]
+
+    def test_create_project_v2_quiet_uses_batch_id_when_lookup_fails(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.v2.batch_projects.return_value = {"id2etag": {"proj_new": "etag"}}
+        mock_client.list_projects.side_effect = Exception("temporary read failure")
+        with patch("ticktick_cli.commands.project_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["-q", "project", "create", "My Project"])
+        assert result.exit_code == 0
+        assert result.output.strip() == "proj_new"
 
     def test_create_project_with_options(self, runner: CliRunner, mock_client: MagicMock) -> None:
         mock_client.v2.batch_projects.return_value = {}

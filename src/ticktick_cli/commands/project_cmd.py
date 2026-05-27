@@ -96,7 +96,8 @@ def project_create(
 
     try:
         if client.has_v2:
-            client.v2.batch_projects(add=[data])
+            response = client.v2.batch_projects(add=[data])
+            created_id = next(iter((response.get("id2etag") or {}).keys()), None)
             try:
                 projects = client.list_projects()
                 created = next(
@@ -108,6 +109,8 @@ def project_create(
                 )
             except Exception:
                 created = None
+            if created is None and created_id:
+                created = {**data, "id": created_id}
         else:
             created = client.v1.create_project(data)
         output_item(
