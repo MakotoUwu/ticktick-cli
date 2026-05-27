@@ -249,11 +249,16 @@ def task_add(
 
     try:
         if client.has_v2:
-            result = client.v2.batch_tasks(add=[task_data])
-            output_message(f"Task created: {title}", ctx)
+            task_data.setdefault("id", _generate_object_id())
+            client.v2.batch_tasks(add=[task_data])
+            output_item(_format_task(task_data), ctx, message=f"Task created: {title}")
         else:
             result = client.v1.create_task(task_data)
-            output_item(_format_task(result), ctx)
+            output_item(
+                _format_task(result),
+                ctx,
+                message=f"Task created: {result.get('title', title)}",
+            )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -431,6 +436,10 @@ def task_done(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
 @click.pass_context
 def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
     """Mark task(s) as 'won't do' (V2 only)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.abandon", {"task_ids": list(task_ids)}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         updates = []
@@ -518,6 +527,10 @@ def task_delete(ctx: click.Context, task_ids: tuple[str, ...], yes: bool) -> Non
 @click.pass_context
 def task_move(ctx: click.Context, task_id: str, project: str) -> None:
     """Move a task to a different project (V2)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.move", {"task_id": task_id, "project": project}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         task = client.v2.get_task(task_id)
@@ -627,6 +640,10 @@ def task_trash(ctx: click.Context, limit: int) -> None:
 @click.pass_context
 def task_pin(ctx: click.Context, task_id: str) -> None:
     """Pin a task (V2)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.pin", {"task_id": task_id}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         task = client.v2.get_task(task_id)
@@ -647,6 +664,10 @@ def task_pin(ctx: click.Context, task_id: str) -> None:
 @click.pass_context
 def task_unpin(ctx: click.Context, task_id: str) -> None:
     """Unpin a task (V2)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.unpin", {"task_id": task_id}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         task = client.v2.get_task(task_id)
@@ -668,12 +689,20 @@ def task_batch_add(ctx: click.Context, filepath: str) -> None:
     """Bulk create tasks from a JSON file."""
     import json
 
-    client = get_client(ctx.obj.get("profile", "default"))
     try:
         with open(filepath) as f:
             tasks = json.load(f)
         if not isinstance(tasks, list):
             tasks = [tasks]
+        if is_dry_run(ctx):
+            output_dry_run(
+                "task.batch-add",
+                {"file": filepath, "count": len(tasks), "tasks": tasks},
+                ctx,
+            )
+            return
+
+        client = get_client(ctx.obj.get("profile", "default"))
         client.v2.batch_tasks(add=tasks)
         output_message(f"Created {len(tasks)} task(s) from {filepath}.", ctx)
     except Exception as e:

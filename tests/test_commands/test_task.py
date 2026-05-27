@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -80,7 +81,15 @@ class TestTaskAdd:
         data = json.loads(result.output)
         assert data["ok"] is True
         assert "New task" in data["message"]
+        assert data["data"]["title"] == "New task"
+        assert re.fullmatch(r"[0-9a-f]{24}", data["data"]["id"])
         mock_client.v2.batch_tasks.assert_called_once()
+
+    def test_add_task_v2_quiet_returns_id(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["-q", "task", "add", "Quiet task"])
+        assert result.exit_code == 0
+        assert re.fullmatch(r"[0-9a-f]{24}", result.output.strip())
 
     def test_add_task_with_options(self, runner: CliRunner, mock_client: MagicMock) -> None:
         with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
@@ -203,3 +212,18 @@ class TestTaskMove:
             result = runner.invoke(cli, ["task", "move", "task1", "--project", "proj2"])
         assert result.exit_code == 0
         mock_client.v2.move_tasks.assert_called_once()
+
+    def test_move_dry_run_skips_client(self, runner: CliRunner) -> None:
+        with patch(
+            "ticktick_cli.commands.task_cmd.get_client",
+            side_effect=AssertionError("get_client should not be called"),
+        ):
+            result = runner.invoke(
+                cli,
+                ["--dry-run", "task", "move", "task1", "--project", "proj2"],
+            )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+        assert data["action"] == "task.move"
+        assert data["details"] == {"task_id": "task1", "project": "proj2"}

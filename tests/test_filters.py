@@ -285,6 +285,8 @@ class TestFilterCreate:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "Filter created" in data["message"]
+        assert data["data"]["name"] == "My Filter"
+        assert data["data"]["id"]
         client.v2.batch_filters.assert_called_once()
         call_args = client.v2.batch_filters.call_args[1]
         added = call_args["add"][0]
@@ -476,6 +478,8 @@ class TestTemplateCreate:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "Template created" in data["message"]
+        assert data["data"]["title"] == "My Template"
+        assert data["data"]["id"]
 
     @patch("ticktick_cli.commands.template_cmd.get_client")
     def test_create_with_items(self, mock_get: MagicMock) -> None:

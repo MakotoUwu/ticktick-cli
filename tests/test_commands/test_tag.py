@@ -27,6 +27,8 @@ class TestTagCreate:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "new-tag" in data["message"]
+        assert data["data"]["name"] == "new-tag"
+        assert data["data"]["label"] == "new-tag"
 
     def test_create_tag_dry_run_if_not_exists_skips_client(self, runner: CliRunner) -> None:
         with patch(

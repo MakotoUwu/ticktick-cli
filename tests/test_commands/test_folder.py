@@ -36,15 +36,30 @@ class TestFolderList:
 
 class TestFolderCreate:
     def test_folder_create(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.get_all_project_groups.return_value = [
+            {"id": "grp_new", "name": "New Folder"},
+        ]
         with patch("ticktick_cli.commands.folder_cmd.get_client", return_value=mock_client):
             result = runner.invoke(cli, ["folder", "create", "New Folder"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["ok"] is True
         assert "created" in data["message"]
+        assert data["data"]["id"] == "grp_new"
+        assert data["data"]["name"] == "New Folder"
         mock_client.v2.batch_project_groups.assert_called_once()
         call_args = mock_client.v2.batch_project_groups.call_args
         assert call_args.kwargs["add"][0]["name"] == "New Folder"
+
+    def test_folder_create_lookup_failure_still_reports_created(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.get_all_project_groups.side_effect = Exception("temporary read failure")
+        with patch("ticktick_cli.commands.folder_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["folder", "create", "New Folder"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"] == {"name": "New Folder"}
 
     def test_folder_create_dry_run(self, runner: CliRunner, mock_client: MagicMock) -> None:
         with patch("ticktick_cli.commands.folder_cmd.get_client", return_value=mock_client):

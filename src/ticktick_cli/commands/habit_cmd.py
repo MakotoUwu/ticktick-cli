@@ -160,7 +160,11 @@ def habit_create(
 
     try:
         client.v2.batch_habits(add=[habit_data])
-        output_message(f"Habit '{name}' created (ID: {habit_id}).", ctx)
+        output_item(
+            _format_habit(habit_data),
+            ctx,
+            message=f"Habit '{name}' created (ID: {habit_id}).",
+        )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

@@ -176,6 +176,14 @@ def main() -> None:
         sys.exit(e.code)
     except click.exceptions.Abort:
         sys.exit(130)
+    except click.ClickException as e:
+        payload: dict[str, object] = {
+            "ok": False,
+            "error": e.format_message(),
+            "exit_code": e.exit_code,
+        }
+        click.echo(json.dumps(payload), err=True)
+        sys.exit(e.exit_code)
     except TickTickCLIError as e:
         payload: dict[str, object] = {"ok": False, "error": str(e), "exit_code": e.exit_code}
         click.echo(json.dumps(payload), err=True)

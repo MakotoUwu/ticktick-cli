@@ -23,11 +23,26 @@ class TestColumnList:
 
 class TestColumnCreate:
     def test_create_column(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.v2.get_columns.return_value = [
+            {"id": "col3", "name": "In Progress", "sortOrder": 2},
+        ]
         with patch("ticktick_cli.commands.kanban_cmd.get_client", return_value=mock_client):
             result = runner.invoke(cli, ["column", "create", "proj1", "In Progress"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "In Progress" in data["message"]
+        assert data["data"]["id"] == "col3"
+        assert data["data"]["name"] == "In Progress"
+
+    def test_create_column_lookup_failure_still_reports_created(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.v2.get_columns.side_effect = Exception("temporary read failure")
+        with patch("ticktick_cli.commands.kanban_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["column", "create", "proj1", "In Progress"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"] == {"projectId": "proj1", "name": "In Progress"}
 
 
 class TestColumnDelete:

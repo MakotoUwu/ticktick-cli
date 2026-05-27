@@ -89,6 +89,15 @@ class TestJsonOutput:
         assert data["ok"] is True
         assert data["data"]["id"] == "task1"
 
+    def test_output_item_with_message(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(human=False)
+        output_item({"id": "task1", "title": "Test"}, ctx, message="Task created")
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["ok"] is True
+        assert data["data"]["id"] == "task1"
+        assert data["message"] == "Task created"
+
     def test_output_message(self, capsys: pytest.CaptureFixture) -> None:
         ctx = _make_ctx(human=False)
         output_message("Task created", ctx)
@@ -303,6 +312,12 @@ class TestQuietOutput:
     def test_output_item_quiet_prints_id(self, capsys: pytest.CaptureFixture) -> None:
         ctx = _make_ctx(quiet=True)
         output_item({"id": "task1", "title": "Test"}, ctx)
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "task1"
+
+    def test_output_item_with_message_quiet_prints_id(self, capsys: pytest.CaptureFixture) -> None:
+        ctx = _make_ctx(quiet=True)
+        output_item({"id": "task1", "title": "Test"}, ctx, message="Created")
         captured = capsys.readouterr()
         assert captured.out.strip() == "task1"
 

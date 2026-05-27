@@ -10,16 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Marketplace-ready Claude Code plugin bundle with packaged TickTick commands and operator Skill
+- Agent metadata in `ticktick schema`, including mutation, confirmation, dry-run, and auth requirements per command
 
 ### Changed
 
 - GitHub Actions workflows now opt into the Node 24 runtime to avoid upcoming runner deprecation issues
 - README roadmap and installation docs now reflect the live PyPI release and working Trusted Publishing setup
 - Hatch now reads the package version directly from `src/ticktick_cli/__init__.py` to keep CLI output and release metadata aligned
+- Successful create-style commands now return structured `data` plus a human-readable `message`
 
 ### Fixed
 
 - `ticktick --version` and `ticktick schema` now report the correct released version
+- Task dry-runs now avoid write-oriented client setup for `abandon`, `move`, `pin`, `unpin`, and `batch-add`
+- `python -m ticktick_cli` and the installed `ticktick` entrypoint now use the same JSON-safe error handling path
+- The publish workflow now reads the dynamic package version from `src/ticktick_cli/__init__.py`
 
 ## [0.1.1] - 2026-03-29
 
@@ -44,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Natural language dates**: `--due tomorrow`, `--start "next monday"`, `--due "in 3 days"` for task date flags
 - **CSV and YAML output**: `--output csv` and `--output yaml` alongside default JSON
 - **Field selection**: `--fields id,title,priority` to return only specific columns
-- **Dry-run mode**: `--dry-run` flag to preview actions without making API calls
+- **Dry-run mode**: `--dry-run` flag to preview actions without applying writes
 - **Shell completions**: `ticktick completion bash|zsh|fish` for auto-complete
 - **Schema command**: `ticktick schema` for agent-discoverable CLI structure
 - **Retry with exponential backoff**: automatic retries for transient API errors
@@ -60,13 +65,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Focus commands** (8): start, stop, status, log, delete, stats, heatmap, by-tag
 - **User commands** (4): profile, status, stats, preferences
 - **Config commands** (4): set, get, list, path
-- **Auth commands** (5): login (V1 OAuth), login-v2 (session), logout, status, refresh
+- **Auth commands** (4): login (V1 OAuth), login-v2 (session), logout, status
 - **Sync command**: full account state dump
 - Dual API support: V1 (OAuth2, official) + V2 (session-based, full feature set)
 - JSON-first output with `{"ok": true, "data": [...]}` envelope
 - Rich terminal tables via `--human` flag
 - Multiple auth profiles via `--profile`
-- XDG-compliant config storage with encrypted credentials
+- XDG-compliant config storage with permission-hardened credentials
 - OAuth CSRF protection and secure credential handling
 - GitHub Actions CI with Python 3.10–3.13 matrix
 - AGENTS.md for AI agent discovery
