@@ -38,7 +38,7 @@ Issues = "https://github.com/MakotoUwu/ticktick-cli/issues"
 Changelog = "https://github.com/MakotoUwu/ticktick-cli/blob/main/CHANGELOG.md"
 
 [project.scripts]
-ticktick = "ticktick_cli.cli:cli"
+ticktick = "ticktick_cli.cli:main"
 
 [project.optional-dependencies]
 dev = [

@@ -33,7 +33,8 @@ ticktick task edit TASK_ID [--title "NEW"] [--priority LEVEL]
 ticktick task done TASK_ID [TASK_ID...]
 ticktick task abandon TASK_ID [TASK_ID...]
 ticktick task delete TASK_ID --yes
-ticktick task move TASK_ID --to PROJECT_ID
+ticktick task move TASK_ID --project PROJECT_ID
+ticktick task skip TASK_ID [--date YYYY-MM-DD]
 ticktick task completed [--from DATE] [--to DATE] [--limit N]
 ticktick task trash [--limit N]
 ticktick task pin TASK_ID
@@ -42,6 +43,8 @@ ticktick task batch-add --file tasks.json
 ticktick task duplicate TASK_ID
 ticktick task convert TASK_ID --to note|task
 ticktick task activity TASK_ID [--limit N]
+ticktick task attachment list TASK_ID
+ticktick task attachment add TASK_ID FILE_PATH [--project PROJECT_ID] [--file-type TYPE] [--no-content-link]
 ticktick task comment list TASK_ID
 ticktick task comment add TASK_ID "TEXT"
 ticktick task comment delete TASK_ID COMMENT_ID --yes
@@ -95,7 +98,7 @@ ticktick tag list
 ticktick tag create "NAME" [--color "#HEX"]
 ticktick tag edit "NAME" [--label "NEW"] [--color "#HEX"]
 ticktick tag rename "OLD" "NEW"
-ticktick tag merge "SOURCE" "TARGET"
+ticktick tag merge "SOURCE" "TARGET" --yes
 ticktick tag delete "NAME" --yes
 ```
 
@@ -115,7 +118,7 @@ ticktick focus start [--duration 25] [--note "deep work"] [--task TASK_ID]  # St
 ticktick focus stop [--save/--no-save]                         # Stop timer
 ticktick focus status                                          # Current timer state
 ticktick focus log --start HH:MM --end HH:MM [--note "note"]  # Log past session
-ticktick focus delete POMODORO_ID                              # Delete record
+ticktick focus delete POMODORO_ID --yes                        # Delete record
 ticktick focus stats                                           # Today/total counts
 ticktick focus heatmap [--days N]                              # Daily focus heatmap
 ticktick focus by-tag [--days N]                               # Focus time by tag
@@ -184,7 +187,7 @@ ticktick [--human] [--quiet] [--output json|csv|yaml] [--fields FIELDS] [--dry-r
 | `--quiet`, `-q` | Bare output — only IDs, one per line. Messages are suppressed. Errors still go to stderr. Takes precedence over `--human` and `--output`. |
 | `--output FORMAT` | `json` (default), `csv`, `yaml` |
 | `--fields FIELDS` | Comma-separated field list: `--fields id,title,priority` |
-| `--dry-run` | Preview actions without making API calls |
+| `--dry-run` | Preview writes without applying changes. Most commands avoid API calls; commands that need existing state may perform read-only lookups. |
 | `--verbose` | Debug output |
 | `--profile NAME` | Auth profile (default: `default`) |
 | `--offset N` | Skip first N items in list output (client-side pagination) |
@@ -271,6 +274,7 @@ All commands return:
 Success (list):  {"ok": true, "data": [...], "count": N, "total": T, "offset": O, "has_more": bool}
 Success (--all): {"ok": true, "data": [...], "count": N}
 Success (item):  {"ok": true, "data": {...}}
+Success message: {"ok": true, "data": {...}, "message": "Task created."}
 Existing:        {"ok": true, "data": {...}, "already_exists": true}
 Message:         {"ok": true, "message": "Task created."}
 Error:           {"ok": false, "error": "description"}
@@ -303,7 +307,7 @@ ticktick task list --due this-week
 
 ### Always safe
 
-- Any read command (`list`, `show`, `search`, `today`, `overdue`, `status`, `sync`, `stats`, `heatmap`, `activity`)
+- Any read command (`list`, `show`, `search`, `today`, `overdue`, `status`, `sync`, `stats`, `heatmap`, `activity`, `attachment list`)
 - `ticktick config list` / `ticktick config path`
 - `ticktick schema`
 - `ticktick focus status`
@@ -311,7 +315,7 @@ ticktick task list --due this-week
 ### Ask user first
 
 - Creating tasks, projects, tags, habits, filters, templates (`add`, `create`)
-- Editing or moving tasks (`edit`, `move`, `convert`)
+- Editing or moving tasks (`edit`, `move`, `convert`, `skip`, `attachment add`)
 - Checking in habits (`checkin`)
 - Starting/stopping focus timer (`focus start`, `focus stop`)
 - Logging focus records (`focus log`)

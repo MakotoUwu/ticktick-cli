@@ -7,7 +7,7 @@ from typing import Any
 import click
 
 from ticktick_cli.auth import get_client
-from ticktick_cli.output import output_error, output_list, output_message
+from ticktick_cli.output import output_error, output_item, output_list, output_message
 
 
 @click.group("column")
@@ -46,7 +46,23 @@ def column_create(ctx: click.Context, project_id: str, name: str, sort_order: in
         data["sortOrder"] = sort_order
     try:
         client.v2.batch_columns(add=[data])
-        output_message(f"Column '{name}' created.", ctx)
+        try:
+            columns = client.v2.get_columns(project_id)
+            created = next((c for c in reversed(columns) if c.get("name") == name), None)
+        except Exception:
+            created = None
+        item = {
+            "projectId": project_id,
+            "name": name,
+        } if not created else {
+            "id": created.get("id", ""),
+            "projectId": project_id,
+            "name": created.get("name", name),
+            "sortOrder": created.get("sortOrder", sort_order if sort_order is not None else 0),
+        }
+        if not item.get("id"):
+            item.pop("id", None)
+        output_item(item, ctx, message=f"Column '{name}' created.")
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

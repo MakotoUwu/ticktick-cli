@@ -60,6 +60,16 @@ class TestCommentModel:
         assert c.user_profile.is_myself is True
         assert c.user_profile.name == "Bob"
 
+    def test_nullable_collections_from_api(self) -> None:
+        c = Comment(
+            id="comment1",
+            title="This is a comment",
+            mentions=None,
+            attachments=None,
+        )
+        assert c.mentions == []
+        assert c.attachments == []
+
     def test_to_output_basic(self) -> None:
         c = Comment(id="c1", title="hello", createdTime="2026-01-01T00:00:00.000+0000")
         out = c.to_output()
@@ -197,6 +207,8 @@ class TestCommentList:
                 "id": "c1",
                 "title": "First comment",
                 "createdTime": "2026-03-12T10:00:00.000+0000",
+                "mentions": None,
+                "attachments": None,
             },
             {
                 "id": "c2",
@@ -282,7 +294,7 @@ class TestCommentDelete:
         runner = CliRunner()
         result = runner.invoke(
             task_group,
-            ["comment", "delete", "task1", "comment1"],
+            ["comment", "delete", "task1", "comment1", "--yes"],
             obj=_make_ctx(),
         )
         assert result.exit_code == 0
@@ -300,7 +312,7 @@ class TestCommentDelete:
         runner = CliRunner()
         result = runner.invoke(
             task_group,
-            ["comment", "delete", "task1", "comment1", "--project", "proj99"],
+            ["comment", "delete", "task1", "comment1", "--project", "proj99", "--yes"],
             obj=_make_ctx(),
         )
         assert result.exit_code == 0
@@ -320,6 +332,18 @@ class TestCommentDelete:
         assert data["dry_run"] is True
         assert data["action"] == "task.comment.delete"
         _mock_get.assert_not_called()
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_delete_aborts_without_yes(self, mock_get: MagicMock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            task_group,
+            ["comment", "delete", "task1", "comment1"],
+            obj=_make_ctx(),
+            input="n\n",
+        )
+        assert result.exit_code != 0
+        mock_get.assert_not_called()
 
 
 class TestTaskActivity:

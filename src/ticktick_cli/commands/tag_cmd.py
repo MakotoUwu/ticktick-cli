@@ -12,6 +12,7 @@ from ticktick_cli.output import (
     output_dry_run,
     output_error,
     output_existing_item,
+    output_item,
     output_list,
     output_message,
 )
@@ -79,7 +80,7 @@ def tag_create(ctx: click.Context, label: str, color: str | None, parent: str | 
 
     try:
         client.v2.batch_tags(add=[tag])
-        output_message(f"Tag '{label}' created.", ctx)
+        output_item(_format_tag(tag), ctx, message=f"Tag '{label}' created.")
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -129,9 +130,12 @@ def tag_rename(ctx: click.Context, old_name: str, new_name: str) -> None:
 @tag_group.command("merge")
 @click.argument("source")
 @click.argument("target")
+@click.option("--yes", is_flag=True, help="Skip confirmation")
 @click.pass_context
-def tag_merge(ctx: click.Context, source: str, target: str) -> None:
+def tag_merge(ctx: click.Context, source: str, target: str, yes: bool) -> None:
     """Merge one tag into another (source is deleted)."""
+    if not yes:
+        click.confirm(f"Merge tag '{source}' into '{target}' and delete '{source}'?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         client.v2.merge_tags(source, target)

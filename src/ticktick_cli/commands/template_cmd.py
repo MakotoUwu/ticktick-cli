@@ -109,7 +109,11 @@ def template_create(
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         client.v2.batch_templates(add=[template_data])
-        output_message(f"Template created: {title} (id: {template_data['id']})", ctx)
+        output_item(
+            TaskTemplate(**template_data).to_output(),
+            ctx,
+            message=f"Template created: {title} (id: {template_data['id']})",
+        )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import click
 
-from ticktick_cli.api.v2 import _generate_object_id
+from ticktick_cli.api.v2 import (
+    _format_attachment_markdown,
+    _generate_object_id,
+    _infer_attachment_file_type,
+)
 from ticktick_cli.auth import get_client
 from ticktick_cli.dates import parse_date
 from ticktick_cli.models.comment import Activity, Comment
@@ -25,6 +31,20 @@ from ticktick_cli.output import (
 PRIORITY_MAP = {"none": 0, "low": 1, "medium": 3, "high": 5}
 PRIORITY_REVERSE = {0: "none", 1: "low", 3: "medium", 5: "high"}
 _FETCH_ALL_LIMIT = 10_000
+_TICKTICK_DATETIME_FORMATS = (
+    "%Y-%m-%dT%H:%M:%S.%f%z",
+    "%Y-%m-%dT%H:%M:%S%z",
+)
+_RECURRENCE_SKIP_PRESERVE_FIELDS = (
+    "repeatFlag",
+    "repeatFrom",
+    "dueDate",
+    "startDate",
+    "timeZone",
+    "isAllDay",
+    "reminder",
+    "reminders",
+)
 
 
 def _format_task(task: dict[str, Any]) -> dict[str, Any]:
@@ -51,6 +71,20 @@ def _format_task(task: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _format_attachment(attachment: dict[str, Any]) -> dict[str, Any]:
+    """Normalize attachment dict for output."""
+    return {
+        "id": attachment.get("id", ""),
+        "refId": attachment.get("refId", ""),
+        "taskId": attachment.get("taskId", ""),
+        "projectId": attachment.get("projectId", ""),
+        "fileName": attachment.get("fileName", ""),
+        "fileType": attachment.get("fileType", ""),
+        "size": attachment.get("size", 0),
+        "path": attachment.get("path"),
+    }
+
+
 def _request_page_limit(ctx: click.Context, limit: int) -> int:
     """Fetch enough rows for global offset pagination before local slicing."""
     offset = int(ctx.obj.get("offset", 0)) if ctx.obj else 0
@@ -58,6 +92,84 @@ def _request_page_limit(ctx: click.Context, limit: int) -> int:
     if fetch_all:
         return max(limit + offset, _FETCH_ALL_LIMIT)
     return limit + offset
+
+
+def _parse_ticktick_datetime(value: str) -> datetime:
+    """Parse TickTick's datetime strings, including compact numeric offsets."""
+    normalized = value.strip()
+    if len(normalized) >= 5 and normalized[-5] in ("+", "-") and ":" not in normalized[-5:]:
+        normalized = f"{normalized[:-2]}:{normalized[-2:]}"
+    for fmt in _TICKTICK_DATETIME_FORMATS:
+        try:
+            return datetime.strptime(normalized, fmt)
+        except ValueError:
+            continue
+    return datetime.fromisoformat(normalized)
+
+
+def _normalize_ex_date(date_value: str) -> str:
+    """Convert a user date token into TickTick's recurrence exception stamp."""
+    token = date_value.strip()
+    if len(token) == 8 and token.isdigit():
+        return token
+    parsed = parse_date(token)
+    return _parse_ticktick_datetime(parsed).strftime("%Y%m%d")
+
+
+def _task_ex_date(task: dict[str, Any], occurrence_date: str | None) -> str:
+    """Return the recurrence exception date for a task occurrence."""
+    if occurrence_date:
+        return _normalize_ex_date(occurrence_date)
+
+    raw_date = task.get("dueDate") or task.get("startDate")
+    if not raw_date:
+        raise ValueError("Recurring task has no dueDate/startDate to skip. Pass --date YYYY-MM-DD.")
+
+    dt = _parse_ticktick_datetime(raw_date)
+    if task.get("isAllDay") or "T" not in raw_date:
+        return dt.strftime("%Y%m%d")
+
+    timezone_name = task.get("timeZone")
+    if timezone_name:
+        try:
+            dt = dt.astimezone(ZoneInfo(timezone_name))
+        except ZoneInfoNotFoundError:
+            pass
+    return dt.strftime("%Y%m%d")
+
+
+def _build_skip_recurrence_update(
+    task: dict[str, Any],
+    occurrence_date: str | None = None,
+) -> tuple[dict[str, Any], str, bool]:
+    """Build the V2 update payload for skipping one recurring occurrence."""
+    if not task.get("repeatFlag"):
+        raise ValueError("Task is not recurring; skip is only available for tasks with repeatFlag.")
+
+    task_id = task.get("id")
+    project_id = task.get("projectId")
+    if not task_id or not project_id:
+        raise ValueError("Task is missing id/projectId and cannot be updated through V2.")
+
+    ex_date = _task_ex_date(task, occurrence_date)
+    existing = [str(value) for value in (task.get("exDate") or [])]
+    seen: set[str] = set()
+    ex_dates = []
+    for value in existing:
+        if value not in seen:
+            ex_dates.append(value)
+            seen.add(value)
+
+    already_skipped = ex_date in seen
+    if not already_skipped:
+        ex_dates.append(ex_date)
+
+    update = {"id": task_id, "projectId": project_id}
+    for field in _RECURRENCE_SKIP_PRESERVE_FIELDS:
+        if field in task:
+            update[field] = task[field]
+    update["exDate"] = ex_dates
+    return update, ex_date, already_skipped
 
 
 @click.group("task")
@@ -145,11 +257,16 @@ def task_add(
 
     try:
         if client.has_v2:
-            result = client.v2.batch_tasks(add=[task_data])
-            output_message(f"Task created: {title}", ctx)
+            task_data.setdefault("id", _generate_object_id())
+            client.v2.batch_tasks(add=[task_data])
+            output_item(_format_task(task_data), ctx, message=f"Task created: {title}")
         else:
             result = client.v1.create_task(task_data)
-            output_item(_format_task(result), ctx)
+            output_item(
+                _format_task(result),
+                ctx,
+                message=f"Task created: {result.get('title', title)}",
+            )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -327,6 +444,10 @@ def task_done(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
 @click.pass_context
 def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
     """Mark task(s) as 'won't do' (V2 only)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.abandon", {"task_ids": list(task_ids)}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         updates = []
@@ -335,6 +456,44 @@ def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
             updates.append({"id": tid, "projectId": task["projectId"], "status": -1})
         client.v2.batch_tasks(update=updates)
         output_message(f"Abandoned {len(task_ids)} task(s).", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@task_group.command("skip")
+@click.argument("task_id")
+@click.option("--date", "occurrence_date", default=None, help="Occurrence date to skip (default: task due date)")
+@click.pass_context
+def task_skip(ctx: click.Context, task_id: str, occurrence_date: str | None) -> None:
+    """Skip one occurrence of a recurring task (V2)."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        if not client.has_v2:
+            raise ValueError("Skipping recurring task occurrences requires V2 authentication.")
+
+        task = client.v2.get_task(task_id)
+        update, ex_date, already_skipped = _build_skip_recurrence_update(task, occurrence_date)
+        details = {
+            "id": task_id,
+            "title": task.get("title", ""),
+            "projectId": update["projectId"],
+            "exDate": ex_date,
+            "repeatFlag": task.get("repeatFlag", ""),
+            "alreadySkipped": already_skipped,
+            "payload": update,
+        }
+
+        if is_dry_run(ctx):
+            output_dry_run("task.skip", details, ctx)
+            return
+
+        if already_skipped:
+            output_item(details, ctx, message=f"Task occurrence {ex_date} was already skipped.")
+            return
+
+        client.v2.skip_task_recurrence(update)
+        output_item(details, ctx, message=f"Skipped recurrence {ex_date} for task {task_id}.")
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -376,6 +535,10 @@ def task_delete(ctx: click.Context, task_ids: tuple[str, ...], yes: bool) -> Non
 @click.pass_context
 def task_move(ctx: click.Context, task_id: str, project: str) -> None:
     """Move a task to a different project (V2)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.move", {"task_id": task_id, "project": project}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         task = client.v2.get_task(task_id)
@@ -504,6 +667,10 @@ def task_trash(ctx: click.Context, limit: int) -> None:
 @click.pass_context
 def task_pin(ctx: click.Context, task_id: str) -> None:
     """Pin a task (V2)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.pin", {"task_id": task_id}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         task = client.v2.get_task(task_id)
@@ -524,6 +691,10 @@ def task_pin(ctx: click.Context, task_id: str) -> None:
 @click.pass_context
 def task_unpin(ctx: click.Context, task_id: str) -> None:
     """Unpin a task (V2)."""
+    if is_dry_run(ctx):
+        output_dry_run("task.unpin", {"task_id": task_id}, ctx)
+        return
+
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         task = client.v2.get_task(task_id)
@@ -545,14 +716,110 @@ def task_batch_add(ctx: click.Context, filepath: str) -> None:
     """Bulk create tasks from a JSON file."""
     import json
 
-    client = get_client(ctx.obj.get("profile", "default"))
     try:
         with open(filepath) as f:
             tasks = json.load(f)
         if not isinstance(tasks, list):
             tasks = [tasks]
+        if is_dry_run(ctx):
+            output_dry_run(
+                "task.batch-add",
+                {"file": filepath, "count": len(tasks), "tasks": tasks},
+                ctx,
+            )
+            return
+
+        client = get_client(ctx.obj.get("profile", "default"))
         client.v2.batch_tasks(add=tasks)
         output_message(f"Created {len(tasks)} task(s) from {filepath}.", ctx)
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+# ── Attachment subgroup ───────────────────────────────────────
+
+
+@task_group.group("attachment")
+def attachment_group() -> None:
+    """Manage task attachments."""
+
+
+@attachment_group.command("list")
+@click.argument("task_id")
+@click.pass_context
+def attachment_list(ctx: click.Context, task_id: str) -> None:
+    """List attachments on a task."""
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        task = client.v2.get_task(task_id)
+        attachments = [_format_attachment(a) for a in task.get("attachments", [])]
+        output_list(
+            attachments,
+            columns=["id", "fileName", "fileType", "size", "path"],
+            title="Attachments",
+            ctx=ctx,
+        )
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@attachment_group.command("add")
+@click.argument("task_id")
+@click.argument("file_path", type=click.Path(exists=True, dir_okay=False, readable=True))
+@click.option("--project", "project_id", default=None, help="Project ID (auto-detected if omitted)")
+@click.option("--file-type", default=None, help="Override TickTick fileType, e.g. IMAGE or PDF")
+@click.option(
+    "--no-content-link",
+    is_flag=True,
+    help="Attach the file without appending TickTick's inline markdown marker.",
+)
+@click.pass_context
+def attachment_add(
+    ctx: click.Context,
+    task_id: str,
+    file_path: str,
+    project_id: str | None,
+    file_type: str | None,
+    no_content_link: bool,
+) -> None:
+    """Upload and attach a file to a task."""
+    path = Path(file_path).expanduser()
+    inferred_file_type = file_type or _infer_attachment_file_type(path)
+    insert_content_link = not no_content_link
+    dry_run_id = _generate_object_id()
+    details = {
+        "task_id": task_id,
+        "project_id": project_id,
+        "file": str(path),
+        "fileName": path.name,
+        "fileType": inferred_file_type,
+        "size": path.stat().st_size,
+        "insert_content_link": insert_content_link,
+        "markdown": (
+            _format_attachment_markdown(dry_run_id, inferred_file_type, path.name)
+            if insert_content_link
+            else None
+        ),
+    }
+    if is_dry_run(ctx):
+        output_dry_run("task.attachment.add", details, ctx)
+        return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        result = client.v2.add_task_attachment(
+            task_id,
+            str(path),
+            project_id=project_id,
+            insert_content_link=insert_content_link,
+            file_type=file_type,
+        )
+        attachment = _format_attachment(result.get("attachment", {}))
+        attachment["markdown"] = result.get("markdown")
+        attachment["contentLinked"] = result.get("contentLinked", False)
+        output_item(attachment, ctx, message="Attachment added.")
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
@@ -611,12 +878,16 @@ def comment_add(ctx: click.Context, task_id: str, text: str, project_id: str | N
 @click.argument("task_id")
 @click.argument("comment_id")
 @click.option("--project", "project_id", default=None, help="Project ID (auto-detected if omitted)")
+@click.option("--yes", is_flag=True, help="Skip confirmation")
 @click.pass_context
-def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id: str | None) -> None:
+def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id: str | None, yes: bool) -> None:
     """Delete a comment from a task."""
     if is_dry_run(ctx):
         output_dry_run("task.comment.delete", {"comment_id": comment_id}, ctx)
         return
+
+    if not yes:
+        click.confirm(f"Delete comment {comment_id} from task {task_id}?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         if not project_id:

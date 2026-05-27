@@ -12,6 +12,139 @@ from typing import Any
 
 import click
 
+_NO_AUTH_COMMANDS = {
+    "auth login",
+    "auth login-v2",
+    "auth logout",
+    "auth status",
+    "completion",
+    "config get",
+    "config list",
+    "config path",
+    "config set",
+    "schema",
+    "version",
+}
+
+_EITHER_API_COMMANDS = {
+    "project create",
+    "project delete",
+    "project list",
+    "project show",
+    "project edit",
+    "task add",
+    "task delete",
+    "task done",
+    "task edit",
+    "task list",
+    "task show",
+}
+
+_MUTATING_COMMANDS = {
+    "auth login",
+    "auth login-v2",
+    "auth logout",
+    "column create",
+    "column delete",
+    "column edit",
+    "config set",
+    "filter create",
+    "filter delete",
+    "filter edit",
+    "focus delete",
+    "focus link",
+    "focus log",
+    "focus start",
+    "focus stop",
+    "folder create",
+    "folder delete",
+    "folder rename",
+    "habit archive",
+    "habit checkin",
+    "habit create",
+    "habit delete",
+    "habit edit",
+    "habit unarchive",
+    "project create",
+    "project delete",
+    "project edit",
+    "subtask set",
+    "subtask unset",
+    "tag create",
+    "tag delete",
+    "tag edit",
+    "tag merge",
+    "tag rename",
+    "task abandon",
+    "task add",
+    "task attachment add",
+    "task batch-add",
+    "task comment add",
+    "task comment delete",
+    "task convert",
+    "task delete",
+    "task done",
+    "task duplicate",
+    "task edit",
+    "task move",
+    "task pin",
+    "task skip",
+    "task unpin",
+    "template create",
+    "template delete",
+}
+
+_DESTRUCTIVE_COMMANDS = {
+    "auth logout",
+    "column delete",
+    "filter delete",
+    "focus delete",
+    "folder delete",
+    "habit delete",
+    "project delete",
+    "tag delete",
+    "tag merge",
+    "task comment delete",
+    "task delete",
+    "template delete",
+}
+
+_DRY_RUN_COMMANDS = {
+    "filter create",
+    "filter delete",
+    "filter edit",
+    "focus delete",
+    "focus link",
+    "focus log",
+    "focus start",
+    "focus stop",
+    "folder create",
+    "folder delete",
+    "habit create",
+    "habit delete",
+    "project create",
+    "project delete",
+    "tag create",
+    "tag delete",
+    "task abandon",
+    "task add",
+    "task attachment add",
+    "task batch-add",
+    "task comment add",
+    "task comment delete",
+    "task convert",
+    "task delete",
+    "task done",
+    "task duplicate",
+    "task edit",
+    "task move",
+    "task pin",
+    "task skip",
+    "task unpin",
+    "template create",
+    "template delete",
+}
+
 
 def _is_real_default(val: Any) -> bool:
     """Check if a default value is a real value (not a Click sentinel/missing marker)."""
@@ -54,6 +187,41 @@ def _param_to_dict(param: click.Parameter) -> dict[str, Any]:
     return info
 
 
+def _normalize_command(command: str) -> str:
+    """Drop the Click root name from schema command paths."""
+    return command.removeprefix("cli ").strip()
+
+
+def _command_metadata(command: str, params: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return agent-facing behavior metadata for a leaf command."""
+    normalized = _normalize_command(command)
+    mutates = normalized in _MUTATING_COMMANDS
+    destructive = normalized in _DESTRUCTIVE_COMMANDS
+    supports_dry_run = normalized in _DRY_RUN_COMMANDS
+    if normalized in _NO_AUTH_COMMANDS:
+        auth_api = "none"
+    elif normalized in _EITHER_API_COMMANDS:
+        auth_api = "either"
+    elif normalized.startswith(("auth ", "config ", "completion", "schema", "version")):
+        auth_api = "none"
+    else:
+        auth_api = "v2"
+
+    metadata: dict[str, Any] = {
+        "agent": {
+            "mutates": mutates,
+            "destructive": destructive,
+            "supports_dry_run": supports_dry_run,
+            "requires_confirmation": destructive,
+            "auth_api": auth_api,
+            "requires_auth": auth_api != "none",
+        }
+    }
+    if supports_dry_run:
+        metadata["agent"]["dry_run_semantics"] = "preview without writes"
+    return metadata
+
+
 def _command_to_dict(cmd: click.BaseCommand, path: str = "") -> list[dict[str, Any]]:
     """Recursively serialize a command/group to dicts."""
     results: list[dict[str, Any]] = []
@@ -71,6 +239,7 @@ def _command_to_dict(cmd: click.BaseCommand, path: str = "") -> list[dict[str, A
         params = [_param_to_dict(p) for p in cmd.params if p.name not in ("help",)]
         if params:
             entry["params"] = params
+        entry.update(_command_metadata(entry["command"], params))
         results.append(entry)
 
     return results

@@ -252,6 +252,21 @@ class TestTaskAbandon:
         result = runner.invoke(task_group, ["abandon", "bad_id"], obj=_make_ctx())
         assert result.exit_code == 1
 
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_abandon_dry_run_skips_client(self, mock_get: MagicMock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            task_group,
+            ["abandon", "t1", "t2"],
+            obj=_make_ctx(dry_run=True),
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+        assert data["action"] == "task.abandon"
+        assert data["details"]["task_ids"] == ["t1", "t2"]
+        mock_get.assert_not_called()
+
 
 # ── Task Pin ─────────────────────────────────────────────────
 
@@ -303,6 +318,17 @@ class TestTaskPin:
         assert len(pinned_time) > 10
         assert "+0000" in pinned_time
 
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_pin_dry_run_skips_client(self, mock_get: MagicMock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(task_group, ["pin", "t1"], obj=_make_ctx(dry_run=True))
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+        assert data["action"] == "task.pin"
+        assert data["details"]["task_id"] == "t1"
+        mock_get.assert_not_called()
+
 
 # ── Task Unpin ───────────────────────────────────────────────
 
@@ -334,6 +360,17 @@ class TestTaskUnpin:
         runner = CliRunner()
         result = runner.invoke(task_group, ["unpin", "bad_id"], obj=_make_ctx())
         assert result.exit_code == 1
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_unpin_dry_run_skips_client(self, mock_get: MagicMock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(task_group, ["unpin", "t1"], obj=_make_ctx(dry_run=True))
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+        assert data["action"] == "task.unpin"
+        assert data["details"]["task_id"] == "t1"
+        mock_get.assert_not_called()
 
 
 # ── Task Today ───────────────────────────────────────────────
@@ -705,5 +742,31 @@ class TestTaskBatchAdd:
                 obj=_make_ctx(),
             )
             assert result.exit_code == 1
+        finally:
+            os.unlink(tmppath)
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_batch_add_dry_run_skips_client(self, mock_get: MagicMock) -> None:
+        tasks = [{"title": "Task A"}, {"title": "Task B"}]
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(tasks, f)
+            tmppath = f.name
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(
+                task_group,
+                ["batch-add", "--file", tmppath],
+                obj=_make_ctx(dry_run=True),
+            )
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data["dry_run"] is True
+            assert data["action"] == "task.batch-add"
+            assert data["details"]["count"] == 2
+            assert data["details"]["tasks"] == tasks
+            mock_get.assert_not_called()
         finally:
             os.unlink(tmppath)

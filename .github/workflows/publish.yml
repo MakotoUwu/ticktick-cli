@@ -51,10 +51,13 @@ jobs:
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
           from pathlib import Path
-          import tomllib
+          import re
 
-          project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
-          print(f"version={project['version']}")
+          init = Path("src/ticktick_cli/__init__.py").read_text()
+          match = re.search(r'^__version__ = "([^"]+)"$', init, re.MULTILINE)
+          if not match:
+              raise SystemExit("Could not read package version from src/ticktick_cli/__init__.py")
+          print(f"version={match.group(1)}")
           PY
 
       - name: Upload distribution artifacts

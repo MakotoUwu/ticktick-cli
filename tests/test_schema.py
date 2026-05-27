@@ -63,3 +63,32 @@ class TestSchemaCommand:
         priority_param = next(p for p in task_add["params"] if p["name"] == "priority")
         assert "choices" in priority_param
         assert "high" in priority_param["choices"]
+
+    def test_schema_includes_agent_metadata(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(cli, ["schema"])
+        data = json.loads(result.output)
+        commands = data["data"]["commands"]
+
+        task_add = next(c for c in commands if c["command"].endswith("task add"))
+        assert task_add["agent"]["mutates"] is True
+        assert task_add["agent"]["destructive"] is False
+        assert task_add["agent"]["supports_dry_run"] is True
+        assert task_add["agent"]["auth_api"] == "either"
+
+        task_delete = next(c for c in commands if c["command"].endswith("task delete"))
+        assert task_delete["agent"]["mutates"] is True
+        assert task_delete["agent"]["destructive"] is True
+        assert task_delete["agent"]["requires_confirmation"] is True
+
+        destructive = [c for c in commands if c["agent"]["destructive"]]
+        assert destructive
+        assert all(c["agent"]["requires_confirmation"] is True for c in destructive)
+
+        task_list = next(c for c in commands if c["command"].endswith("task list"))
+        assert task_list["agent"]["mutates"] is False
+        assert task_list["agent"]["requires_auth"] is True
+
+        auth_status = next(c for c in commands if c["command"].endswith("auth status"))
+        assert auth_status["agent"]["auth_api"] == "none"
+        assert auth_status["agent"]["requires_auth"] is False

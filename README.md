@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TickTick_API-100%25_coverage-brightgreen" alt="API Coverage">
   <a href="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml"><img src="https://github.com/MakotoUwu/ticktick-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-439_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/output-JSON_%7C_CSV_%7C_YAML_%7C_Rich_Tables-blue" alt="Output Modes">
 </p>
 
@@ -37,10 +37,10 @@ The [emerging consensus](https://steipete.me/posts/2025/peekaboo-2-freeing-the-c
 - **Focus timer control** -- start, stop, log, and delete pomodoro sessions directly from CLI
 - **Multiple output formats** -- JSON (default), CSV, YAML, or rich terminal tables (`--human`)
 - **Natural language dates** -- `--due tomorrow`, `--start "next monday"`, `--due "in 3 days"`
-- **Agent-friendly design** -- no interactive prompts, `--yes` flags, `--dry-run`, deterministic exit codes (0/1/2)
+- **Agent-friendly design** -- no interactive prompts, `--yes` flags, `--dry-run`, deterministic exit codes (0-6)
 - **Field selection** -- `--fields id,title,priority` to return only what you need
 - **Multiple profiles** -- `--profile work` / `--profile personal` for separate accounts
-- **Security-first** -- OAuth CSRF protection, encrypted credential storage (600 permissions), env var support for secrets
+- **Security-first** -- OAuth CSRF protection, permission-hardened credential storage (600 permissions), env var support for secrets
 - **Shell completions** -- bash, zsh, fish auto-complete out of the box
 - **Retry with backoff** -- automatic retries for transient API errors, V1 token auto-refresh
 
@@ -204,7 +204,7 @@ ticktick sync
 
 | Domain | Commands | API |
 |--------|----------|-----|
-| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` `duplicate` `convert` `activity` `comment list` `comment add` `comment delete` | V1+V2 |
+| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `skip` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` `duplicate` `convert` `activity` `attachment list` `attachment add` `comment list` `comment add` `comment delete` | V1+V2 |
 | **Subtasks** | `set` `unset` `list` | V2 |
 | **Projects** | `list` `create` `show` `edit` `delete` | V1+V2 |
 | **Folders** | `list` `create` `rename` `delete` | V2 |
@@ -216,7 +216,7 @@ ticktick sync
 | **Templates** | `list` `show` `create` `delete` | V2 |
 | **User** | `profile` `status` `stats` `preferences` | V2 |
 | **Config** | `set` `get` `list` `path` | -- |
-| **Auth** | `login` `login-v2` `logout` `status` `refresh` | -- |
+| **Auth** | `login` `login-v2` `logout` `status` | -- |
 | **Utilities** | `sync` `schema` `completion` `version` | V2 |
 
 ### Global Options
@@ -226,7 +226,7 @@ ticktick sync
 | `--human` | Rich table output instead of JSON |
 | `--output FORMAT` | Output format: `json` (default), `csv`, `yaml` |
 | `--fields FIELDS` | Comma-separated list of fields to include |
-| `--dry-run` | Preview what would happen without making changes |
+| `--dry-run` | Preview writes without applying changes; commands that need existing state may still perform read-only lookups |
 | `--verbose` | Enable debug output |
 | `--profile NAME` | Auth profile to use (default: `default`) |
 | `--version` | Show version |
@@ -236,10 +236,13 @@ ticktick sync
 
 Every command returns a consistent JSON envelope:
 
-```
-Success:  {"ok": true, "data": <result>, "count": <n>}
-Message:  {"ok": true, "message": "Task created."}
-Error:    {"ok": false, "error": "description"}
+```json
+Success (list):  {"ok": true, "data": [...], "count": N, "total": T, "offset": O, "has_more": bool}
+Success (--all): {"ok": true, "data": [...], "count": N}
+Success (item):  {"ok": true, "data": {...}}
+Success message: {"ok": true, "data": {...}, "message": "Task created."}
+Existing:        {"ok": true, "data": {...}, "already_exists": true}
+Error:           {"ok": false, "error": "description"}
 ```
 
 ### Exit Codes
@@ -247,8 +250,12 @@ Error:    {"ok": false, "error": "description"}
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | General error (API error, invalid input) |
-| `2` | Authentication error (not logged in, expired token) |
+| `1` | General error |
+| `2` | Usage / input error |
+| `3` | Authentication failure |
+| `4` | Resource not found |
+| `5` | Rate limited (transient, safe to retry) |
+| `6` | Conflict / resource already exists |
 
 ## Agent Integration
 
@@ -369,7 +376,7 @@ pytest -v
 # Build release artifacts
 uv build
 
-# All 439 tests should pass
+# All tests should pass
 ```
 
 ### Releasing
@@ -410,8 +417,8 @@ src/ticktick_cli/
     filter.py      # Filter, FilterRule, FilterCondition
     template.py    # TaskTemplate
   commands/
-    auth_cmd.py    # login, login-v2, logout, status, refresh
-    task_cmd.py    # 22 task commands + comments + convert
+    auth_cmd.py    # login, login-v2, logout, status
+    task_cmd.py    # task commands, attachments, comments, recurrence skip, convert
     project_cmd.py # CRUD for projects
     folder_cmd.py  # CRUD for folders
     tag_cmd.py     # tag management + merge
@@ -442,10 +449,10 @@ This is an **unofficial, community-built** CLI. TickTick released their own [`@t
 | API coverage | V1 + V2 (100%) | V1 only | V1 only |
 | Habits, Focus, Kanban | Yes | No | No |
 | Filters, Templates | Yes | No | No |
-| Comments, Activity feed | Yes | No | No |
+| Attachments, Comments, Activity feed | Yes | No | No |
 | JSON-first output | `{"ok": true, "data": ...}` | `--json` flag | JSON-RPC |
 | CSV / YAML / Rich tables | Yes | No | No |
-| `--dry-run` | All mutating commands | No | No |
+| `--dry-run` | Supported write previews | No | No |
 | `--fields` selection | Yes | No | No |
 | `schema` introspection | Yes | No | Partial |
 | Natural language dates | Yes | No | No |

@@ -393,13 +393,16 @@ def focus_log(ctx: click.Context, start_time: str, end_time: str, note: str) -> 
 
 @focus_group.command("delete")
 @click.argument("pomodoro_id")
+@click.option("--yes", is_flag=True, help="Skip confirmation")
 @click.pass_context
-def focus_delete(ctx: click.Context, pomodoro_id: str) -> None:
+def focus_delete(ctx: click.Context, pomodoro_id: str, yes: bool) -> None:
     """Delete a pomodoro record by ID."""
     if is_dry_run(ctx):
         output_dry_run("focus delete", {"id": pomodoro_id}, ctx)
         return
 
+    if not yes:
+        click.confirm(f"Delete pomodoro record {pomodoro_id}?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         client.v2.delete_pomodoro(pomodoro_id)

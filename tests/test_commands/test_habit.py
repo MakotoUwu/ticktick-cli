@@ -44,6 +44,8 @@ class TestHabitCreate:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "Meditate" in data["message"]
+        assert data["data"]["name"] == "Meditate"
+        assert len(data["data"]["id"]) == 24
         mock_client.v2.batch_habits.assert_called_once()
 
     def test_create_numeric_habit(self, runner: CliRunner, mock_client: MagicMock) -> None:

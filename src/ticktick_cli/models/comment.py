@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserProfile(BaseModel):
@@ -28,6 +30,12 @@ class Comment(BaseModel):
     reply_user_profile: UserProfile | None = Field(None, alias="replyUserProfile")
 
     model_config = {"populate_by_name": True, "extra": "allow"}
+
+    @field_validator("mentions", "attachments", mode="before")
+    @classmethod
+    def _default_nullable_lists(cls, value: Any) -> Any:
+        """TickTick can return null for empty comment collections."""
+        return [] if value is None else value
 
     def to_output(self) -> dict:
         """Convert to output-friendly dict."""

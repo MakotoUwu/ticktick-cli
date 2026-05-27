@@ -30,6 +30,14 @@ def _format_project(p: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _project_output(p: dict[str, Any]) -> dict[str, Any]:
+    """Format project output while avoiding empty IDs in quiet mode."""
+    result = _format_project(p)
+    if not result.get("id"):
+        result.pop("id", None)
+    return result
+
+
 @click.group("project")
 def project_group() -> None:
     """Manage projects (lists)."""
@@ -88,10 +96,28 @@ def project_create(
 
     try:
         if client.has_v2:
-            client.v2.batch_projects(add=[data])
+            response = client.v2.batch_projects(add=[data])
+            created_id = next(iter((response.get("id2etag") or {}).keys()), None)
+            try:
+                projects = client.list_projects()
+                created = next(
+                    (
+                        p for p in reversed(projects)
+                        if p.get("name") == name and (folder is None or p.get("groupId") == folder)
+                    ),
+                    None,
+                )
+            except Exception:
+                created = None
+            if created is None and created_id:
+                created = {**data, "id": created_id}
         else:
-            client.v1.create_project(data)
-        output_message(f"Project '{name}' created.", ctx)
+            created = client.v1.create_project(data)
+        output_item(
+            _project_output(created or data),
+            ctx,
+            message=f"Project '{name}' created.",
+        )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

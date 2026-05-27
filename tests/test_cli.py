@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 from click.testing import CliRunner
@@ -63,7 +67,7 @@ def test_task_subcommands(runner: CliRunner) -> None:
     assert result.exit_code == 0
     expected = [
         "add", "list", "show", "edit", "done", "abandon",
-        "delete", "move", "search", "today", "overdue",
+        "skip", "delete", "move", "search", "today", "overdue",
         "completed", "trash", "pin", "unpin", "batch-add",
     ]
     for cmd in expected:
@@ -180,3 +184,37 @@ def test_env_var_profile(runner: CliRunner) -> None:
     """TICKTICK_PROFILE is accepted as env var."""
     result = runner.invoke(cli, ["--help"], env={"TICKTICK_PROFILE": "work"})
     assert result.exit_code == 0
+
+
+def test_module_entrypoint_missing_auth_returns_json(tmp_path) -> None:
+    """Installed/module entrypoints should use the JSON-safe main wrapper."""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "src"
+    env["XDG_CONFIG_HOME"] = str(tmp_path)
+    env.pop("TICKTICK_PROFILE", None)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ticktick_cli",
+            "--output",
+            "json",
+            "--profile",
+            "missing",
+            "task",
+            "list",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 3
+    assert "Traceback" not in result.stderr
+    data = json.loads(result.stderr)
+    assert data["ok"] is False
+    assert data["exit_code"] == 3
+    assert "Not authenticated" in data["error"]

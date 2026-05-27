@@ -9,6 +9,7 @@ from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
     output_error,
+    output_item,
     output_list,
     output_message,
 )
@@ -45,7 +46,15 @@ def folder_create(ctx: click.Context, name: str) -> None:
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         client.v2.batch_project_groups(add=[{"name": name, "listType": "group"}])
-        output_message(f"Folder '{name}' created.", ctx)
+        try:
+            groups = client.get_all_project_groups()
+            created = next((g for g in reversed(groups) if g.get("name") == name), None)
+        except Exception:
+            created = None
+        item = {"name": name} if not created else {"id": created.get("id", ""), "name": created.get("name", name)}
+        if not item.get("id"):
+            item.pop("id", None)
+        output_item(item, ctx, message=f"Folder '{name}' created.")
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None

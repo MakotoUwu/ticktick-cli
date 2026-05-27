@@ -254,6 +254,8 @@ def output_list(
 def output_item(
     item: dict[str, Any],
     ctx: click.Context | None = None,
+    *,
+    message: str | None = None,
 ) -> None:
     """Output a single item."""
     if _is_quiet(ctx):
@@ -265,6 +267,10 @@ def output_item(
     item = _apply_fields_filter(item, _get_fields(ctx))
 
     if human:
+        if message:
+            from rich.console import Console
+
+            Console().print(f"[green]{message}[/green]")
         _print_detail(item)
     elif fmt == "csv":
         print(_to_csv([item]), end="")
@@ -272,6 +278,8 @@ def output_item(
         print(_to_yaml(item), end="")
     else:
         result = {"ok": True, "data": item}
+        if message:
+            result["message"] = message
         print(json.dumps(result, indent=2, default=_serialize))
 
 

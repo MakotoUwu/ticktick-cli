@@ -164,7 +164,11 @@ def filter_create(
     client = get_client(ctx.obj.get("profile", "default"))
     try:
         client.v2.batch_filters(add=[filter_data])
-        output_message(f"Filter created: {name} (id: {filter_data['id']})", ctx)
+        output_item(
+            Filter(**filter_data).to_output(),
+            ctx,
+            message=f"Filter created: {name} (id: {filter_data['id']})",
+        )
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
