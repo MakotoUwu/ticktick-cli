@@ -51,6 +51,53 @@ class TestTaskModel:
         assert out["id"] == "t1"
         assert out["status"] == "completed"
         assert out["priority"] == "medium"
+        assert out["parentId"] is None
+        assert out["columnId"] is None
+        assert out["pinnedTime"] is None
+        assert out["sortOrder"] is None
+
+    def test_v2_metadata_to_output(self) -> None:
+        task = Task(
+            id="t1",
+            title="Test",
+            assignee=123,
+            kind="TEXT",
+            desc="Longer description",
+            isFloating=True,
+            timeZone="Europe/Brussels",
+            progress=50,
+            sortOrder=42,
+            repeatFrom="1",
+            exDate=["2026-05-27"],
+            repeatFirstDate="2026-05-28",
+            reminders=[{"id": "r1", "trigger": "TRIGGER:-PT30M"}],
+            commentCount=2,
+        )
+        out = task.to_output()
+        assert out["assignee"] == 123
+        assert out["kind"] == "TEXT"
+        assert out["desc"] == "Longer description"
+        assert out["isFloating"] is True
+        assert out["timeZone"] == "Europe/Brussels"
+        assert out["progress"] == 50
+        assert out["sortOrder"] == 42
+        assert out["repeatFrom"] == "1"
+        assert out["exDate"] == ["2026-05-27"]
+        assert out["repeatFirstDate"] == "2026-05-28"
+        assert out["reminders"] == [{"id": "r1", "trigger": "TRIGGER:-PT30M"}]
+        assert out["commentCount"] == 2
+
+    def test_string_reminders_to_output(self) -> None:
+        task = Task(id="t1", reminders=["TRIGGER:-PT30M"], commentCount=1)
+        out = task.to_output()
+        assert out["reminders"] == ["TRIGGER:-PT30M"]
+        assert out["commentCount"] == 1
+
+    def test_numeric_repeat_from_to_output(self) -> None:
+        task = Task(id="t1", repeatFrom=1, commentCount=1)
+        out = task.to_output()
+        assert out["repeatFrom"] == 1
+        assert out["commentCount"] == 1
 
     def test_extra_fields_allowed(self) -> None:
         task = Task(id="t1", unknownField="value")

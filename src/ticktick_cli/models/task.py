@@ -45,6 +45,18 @@ class Task(BaseModel):
     repeat_flag: str | None = Field(default=None, alias="repeatFlag")
     created_time: str | None = Field(default=None, alias="createdTime")
     modified_time: str | None = Field(default=None, alias="modifiedTime")
+    assignee: int | None = None
+    kind: str | None = None
+    desc: str | None = None
+    is_floating: bool | None = Field(default=None, alias="isFloating")
+    time_zone: str | None = Field(default=None, alias="timeZone")
+    progress: int | None = None
+    sort_order: int | None = Field(default=None, alias="sortOrder")
+    repeat_from: str | int | None = Field(default=None, alias="repeatFrom")
+    ex_date: list[str] | None = Field(default=None, alias="exDate")
+    repeat_first_date: str | None = Field(default=None, alias="repeatFirstDate")
+    reminders: list[dict[str, Any] | str] | None = None
+    comment_count: int | None = Field(default=None, alias="commentCount")
 
     model_config = {"populate_by_name": True, "extra": "allow"}
 
@@ -64,7 +76,7 @@ class Task(BaseModel):
 
     def to_output(self) -> dict[str, Any]:
         """Serialize for CLI output."""
-        return {
+        output: dict[str, Any] = {
             "id": self.id,
             "title": self.title,
             "status": self.status_label,
@@ -78,5 +90,22 @@ class Task(BaseModel):
             "parentId": self.parent_id,
             "columnId": self.column_id,
             "pinnedTime": self.pinned_time,
+            "sortOrder": self.sort_order,
             "items": self.items,
         }
+        optional = {
+            "assignee": self.assignee,
+            "kind": self.kind,
+            "desc": self.desc,
+            "isFloating": self.is_floating,
+            "timeZone": self.time_zone,
+            "progress": self.progress,
+            "repeatFrom": self.repeat_from,
+            "repeatFlag": self.repeat_flag,
+            "exDate": self.ex_date,
+            "repeatFirstDate": self.repeat_first_date,
+            "reminders": self.reminders,
+            "commentCount": self.comment_count,
+        }
+        output.update({key: value for key, value in optional.items() if value is not None})
+        return output

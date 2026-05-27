@@ -101,6 +101,45 @@ class TestTaskShow:
         assert data["data"]["id"] == "task1"
         assert data["data"]["title"] == "Buy groceries"
 
+    def test_show_task_includes_v2_metadata(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.v2.get_task.return_value = {
+            "id": "task1",
+            "title": "Detailed task",
+            "projectId": "proj1",
+            "status": 0,
+            "priority": 0,
+            "assignee": 123,
+            "kind": "TEXT",
+            "desc": "Longer description",
+            "isFloating": True,
+            "timeZone": "Europe/Brussels",
+            "progress": 25,
+            "sortOrder": 10,
+            "repeatFrom": 1,
+            "exDate": ["2026-05-27"],
+            "repeatFirstDate": "2026-05-28",
+            "reminders": ["TRIGGER:-PT30M"],
+            "commentCount": 3,
+        }
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "show", "task1"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"]["assignee"] == 123
+        assert data["data"]["kind"] == "TEXT"
+        assert data["data"]["desc"] == "Longer description"
+        assert data["data"]["isFloating"] is True
+        assert data["data"]["timeZone"] == "Europe/Brussels"
+        assert data["data"]["progress"] == 25
+        assert data["data"]["sortOrder"] == 10
+        assert data["data"]["repeatFrom"] == 1
+        assert data["data"]["exDate"] == ["2026-05-27"]
+        assert data["data"]["repeatFirstDate"] == "2026-05-28"
+        assert data["data"]["reminders"] == ["TRIGGER:-PT30M"]
+        assert data["data"]["commentCount"] == 3
+
 
 class TestTaskAdd:
     def test_add_task_v2(self, runner: CliRunner, mock_client: MagicMock) -> None:
@@ -164,6 +203,57 @@ class TestTaskSearch:
         data = json.loads(result.output)
         assert data["ok"] is True
         assert any("groceries" in t["title"].lower() for t in data["data"])
+
+    def test_search_tasks_with_filters(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.get_all_tasks.return_value = [
+            {
+                "id": "task1",
+                "title": "Write report",
+                "projectId": "proj1",
+                "status": 0,
+                "priority": 5,
+                "tags": ["work"],
+                "content": "",
+            },
+            {
+                "id": "task2",
+                "title": "Write report draft",
+                "projectId": "proj2",
+                "status": 0,
+                "priority": 3,
+                "tags": ["work"],
+                "content": "",
+            },
+            {
+                "id": "task3",
+                "title": "Write report notes",
+                "projectId": "proj1",
+                "status": 0,
+                "priority": 5,
+                "tags": ["personal"],
+                "content": "",
+            },
+        ]
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(
+                cli,
+                [
+                    "task",
+                    "search",
+                    "report",
+                    "--project",
+                    "Inbox",
+                    "--tag",
+                    "work",
+                    "--priority",
+                    "high",
+                ],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert [task["id"] for task in data["data"]] == ["task1"]
 
 
 class TestTaskMove:
