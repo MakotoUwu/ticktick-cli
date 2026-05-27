@@ -55,7 +55,7 @@ class Task(BaseModel):
     repeat_from: str | None = Field(default=None, alias="repeatFrom")
     ex_date: list[str] | None = Field(default=None, alias="exDate")
     repeat_first_date: str | None = Field(default=None, alias="repeatFirstDate")
-    reminders: list[dict[str, Any]] | None = None
+    reminders: list[dict[str, Any] | str] | None = None
     comment_count: int | None = Field(default=None, alias="commentCount")
 
     model_config = {"populate_by_name": True, "extra": "allow"}

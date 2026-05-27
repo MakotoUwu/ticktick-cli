@@ -87,6 +87,12 @@ class TestTaskModel:
         assert out["reminders"] == [{"id": "r1", "trigger": "TRIGGER:-PT30M"}]
         assert out["commentCount"] == 2
 
+    def test_string_reminders_to_output(self) -> None:
+        task = Task(id="t1", reminders=["TRIGGER:-PT30M"], commentCount=1)
+        out = task.to_output()
+        assert out["reminders"] == ["TRIGGER:-PT30M"]
+        assert out["commentCount"] == 1
+
     def test_extra_fields_allowed(self) -> None:
         task = Task(id="t1", unknownField="value")
         assert task.id == "t1"

@@ -118,7 +118,7 @@ class TestTaskShow:
             "repeatFrom": "1",
             "exDate": ["2026-05-27"],
             "repeatFirstDate": "2026-05-28",
-            "reminders": [{"id": "r1", "trigger": "TRIGGER:-PT30M"}],
+            "reminders": ["TRIGGER:-PT30M"],
             "commentCount": 3,
         }
 
@@ -137,7 +137,7 @@ class TestTaskShow:
         assert data["data"]["repeatFrom"] == "1"
         assert data["data"]["exDate"] == ["2026-05-27"]
         assert data["data"]["repeatFirstDate"] == "2026-05-28"
-        assert data["data"]["reminders"] == [{"id": "r1", "trigger": "TRIGGER:-PT30M"}]
+        assert data["data"]["reminders"] == ["TRIGGER:-PT30M"]
         assert data["data"]["commentCount"] == 3
 
 
