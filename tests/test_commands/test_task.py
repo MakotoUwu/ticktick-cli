@@ -60,6 +60,36 @@ class TestTaskList:
         data = json.loads(result.output)
         assert data["count"] == 2
 
+    def test_list_tasks_with_sort_order(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        mock_client.get_all_tasks.return_value = [
+            {
+                "id": "task-second",
+                "title": "Second",
+                "projectId": "proj1",
+                "status": 0,
+                "priority": 0,
+                "sortOrder": 200,
+            },
+            {
+                "id": "task-first",
+                "title": "First",
+                "projectId": "proj1",
+                "status": 0,
+                "priority": 0,
+                "sortOrder": 100,
+            },
+        ]
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "list", "--sort", "sortOrder"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"][0]["title"] == "First"
+        assert data["data"][0]["sortOrder"] == 100
+        assert data["data"][1]["title"] == "Second"
+        assert data["data"][1]["sortOrder"] == 200
+
 
 class TestTaskShow:
     def test_show_task(self, runner: CliRunner, mock_client: MagicMock) -> None:
