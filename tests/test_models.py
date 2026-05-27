@@ -93,6 +93,12 @@ class TestTaskModel:
         assert out["reminders"] == ["TRIGGER:-PT30M"]
         assert out["commentCount"] == 1
 
+    def test_numeric_repeat_from_to_output(self) -> None:
+        task = Task(id="t1", repeatFrom=1, commentCount=1)
+        out = task.to_output()
+        assert out["repeatFrom"] == 1
+        assert out["commentCount"] == 1
+
     def test_extra_fields_allowed(self) -> None:
         task = Task(id="t1", unknownField="value")
         assert task.id == "t1"

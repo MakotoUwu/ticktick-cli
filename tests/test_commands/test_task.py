@@ -115,7 +115,7 @@ class TestTaskShow:
             "timeZone": "Europe/Brussels",
             "progress": 25,
             "sortOrder": 10,
-            "repeatFrom": "1",
+            "repeatFrom": 1,
             "exDate": ["2026-05-27"],
             "repeatFirstDate": "2026-05-28",
             "reminders": ["TRIGGER:-PT30M"],
@@ -134,7 +134,7 @@ class TestTaskShow:
         assert data["data"]["timeZone"] == "Europe/Brussels"
         assert data["data"]["progress"] == 25
         assert data["data"]["sortOrder"] == 10
-        assert data["data"]["repeatFrom"] == "1"
+        assert data["data"]["repeatFrom"] == 1
         assert data["data"]["exDate"] == ["2026-05-27"]
         assert data["data"]["repeatFirstDate"] == "2026-05-28"
         assert data["data"]["reminders"] == ["TRIGGER:-PT30M"]

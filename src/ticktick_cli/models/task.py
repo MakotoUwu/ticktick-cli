@@ -52,7 +52,7 @@ class Task(BaseModel):
     time_zone: str | None = Field(default=None, alias="timeZone")
     progress: int | None = None
     sort_order: int | None = Field(default=None, alias="sortOrder")
-    repeat_from: str | None = Field(default=None, alias="repeatFrom")
+    repeat_from: str | int | None = Field(default=None, alias="repeatFrom")
     ex_date: list[str] | None = Field(default=None, alias="exDate")
     repeat_first_date: str | None = Field(default=None, alias="repeatFirstDate")
     reminders: list[dict[str, Any] | str] | None = None
