@@ -347,6 +347,7 @@ def task_show(ctx: click.Context, task_id: str) -> None:
     """Show detailed task information."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         if client.has_v2:
             task = client.v2.get_task(task_id)
         else:
@@ -398,6 +399,8 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
     if kwargs.get("project"):
         update["projectId"] = _resolve_project_id(client, kwargs["project"])
     try:
+        task_id = _resolve_task_id(client, task_id)
+        update["id"] = task_id
         if client.has_v2:
             # Need projectId for V2 update
             if "projectId" not in update:
@@ -423,6 +426,7 @@ def task_done(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_ids = tuple(_resolve_task_id(client, tid) for tid in task_ids)
         if client.has_v1:
             for tid in task_ids:
                 task = _get_task_any(client, tid)
@@ -450,6 +454,7 @@ def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_ids = tuple(_resolve_task_id(client, tid) for tid in task_ids)
         updates = []
         for tid in task_ids:
             task = client.v2.get_task(tid)
@@ -472,6 +477,7 @@ def task_skip(ctx: click.Context, task_id: str, occurrence_date: str | None) -> 
         if not client.has_v2:
             raise ValueError("Skipping recurring task occurrences requires V2 authentication.")
 
+        task_id = _resolve_task_id(client, task_id)
         task = client.v2.get_task(task_id)
         update, ex_date, already_skipped = _build_skip_recurrence_update(task, occurrence_date)
         details = {
@@ -513,6 +519,7 @@ def task_delete(ctx: click.Context, task_ids: tuple[str, ...], yes: bool) -> Non
         click.confirm(f"Delete {len(task_ids)} task(s)?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_ids = tuple(_resolve_task_id(client, tid) for tid in task_ids)
         if client.has_v2:
             deletes = []
             for tid in task_ids:
@@ -541,6 +548,7 @@ def task_move(ctx: click.Context, task_id: str, project: str) -> None:
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         task = client.v2.get_task(task_id)
         to_project = _resolve_project_id(client, project)
         client.v2.move_tasks([{
@@ -673,6 +681,7 @@ def task_pin(ctx: click.Context, task_id: str) -> None:
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         task = client.v2.get_task(task_id)
         now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
         client.v2.batch_tasks(update=[{
@@ -697,6 +706,7 @@ def task_unpin(ctx: click.Context, task_id: str) -> None:
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         task = client.v2.get_task(task_id)
         client.v2.batch_tasks(update=[{
             "id": task_id,
@@ -752,6 +762,7 @@ def attachment_list(ctx: click.Context, task_id: str) -> None:
     """List attachments on a task."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         task = client.v2.get_task(task_id)
         attachments = [_format_attachment(a) for a in task.get("attachments", [])]
         output_list(
@@ -809,6 +820,7 @@ def attachment_add(
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         result = client.v2.add_task_attachment(
             task_id,
             str(path),
@@ -841,6 +853,7 @@ def comment_list(ctx: click.Context, task_id: str, project_id: str | None) -> No
     """List comments on a task."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         if not project_id:
             task = client.v2.get_task(task_id)
             project_id = task.get("projectId", "")
@@ -864,6 +877,7 @@ def comment_add(ctx: click.Context, task_id: str, text: str, project_id: str | N
         return
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         if not project_id:
             task = client.v2.get_task(task_id)
             project_id = task.get("projectId", "")
@@ -890,6 +904,7 @@ def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id
         click.confirm(f"Delete comment {comment_id} from task {task_id}?", abort=True)
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         if not project_id:
             task = client.v2.get_task(task_id)
             project_id = task.get("projectId", "")
@@ -910,6 +925,7 @@ def task_activity(ctx: click.Context, task_id: str) -> None:
     """Show change history for a task."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         raw = client.v2.get_task_activities(task_id)
         activities = [Activity(**a).to_output() for a in raw]
         output_list(activities, columns=["id", "action", "when"], title="Activities", ctx=ctx)
@@ -931,6 +947,7 @@ def task_duplicate(ctx: click.Context, task_id: str) -> None:
         return
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         task = client.v2.get_task(task_id)
         new_task = dict(task)
         new_task["id"] = _generate_object_id()
@@ -968,6 +985,7 @@ def task_convert(ctx: click.Context, task_id: str, target_kind: str) -> None:
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
+        task_id = _resolve_task_id(client, task_id)
         task = client.v2.get_task(task_id)
         client.v2.batch_tasks(update=[{
             "id": task_id,
@@ -992,6 +1010,40 @@ def _resolve_project_id(client: Any, name_or_id: str) -> str:
         if proj.get("name", "").lower() == name_or_id.lower():
             return proj["id"]
     return name_or_id  # Fallback: treat as ID
+
+
+_HEX_DIGITS = frozenset("0123456789abcdef")
+
+
+def _resolve_task_id(client: Any, task_id: str) -> str:
+    """Resolve an abbreviated hex task-ID prefix to a full task ID.
+
+    A full (24-char) ID, or any value containing non-hex characters, passes
+    through unchanged — so full IDs used by agents/scripts and any non-hex
+    identifiers are never looked up, and only a deliberate hex prefix triggers
+    resolution. A short hex prefix is matched against active tasks
+    (``get_all_tasks``); a unique match returns the full ID, while zero matches
+    or an ambiguous prefix raise. Only active tasks are searched — completed or
+    trashed tasks will not resolve by prefix.
+    """
+    normalized = task_id.lower()
+    if len(normalized) >= 24 or not normalized or not set(normalized) <= _HEX_DIGITS:
+        return task_id
+    candidates = [
+        str(t["id"])
+        for t in client.get_all_tasks()
+        if str(t.get("id", "")).lower().startswith(normalized)
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        from ticktick_cli.exceptions import NotFoundError
+
+        raise NotFoundError(f"No active task matches ID prefix '{task_id}'.")
+    preview = ", ".join(candidates[:10])
+    raise ValueError(
+        f"Ambiguous task ID prefix '{task_id}' matches {len(candidates)} tasks: {preview}"
+    )
 
 
 
