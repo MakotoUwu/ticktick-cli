@@ -50,6 +50,8 @@ ticktick task comment add TASK_ID "TEXT"
 ticktick task comment delete TASK_ID COMMENT_ID --yes
 ```
 
+**Short IDs (human convenience):** any `TASK_ID` also accepts a unique hex ID *prefix* (e.g. `ticktick task show 69ea1966`), resolved against active tasks. Full 24-char IDs — and any non-hex value — pass through unchanged, so **agents should keep using the full `id` from JSON output**. An ambiguous or unknown prefix returns a structured error. Only active tasks resolve by prefix (not completed/trashed).
+
 ### Subtasks
 
 ```bash
