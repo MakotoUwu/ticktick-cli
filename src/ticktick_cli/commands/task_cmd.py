@@ -1025,9 +1025,20 @@ def _resolve_task_id(client: Any, task_id: str) -> str:
     (``get_all_tasks``); a unique match returns the full ID, while zero matches
     or an ambiguous prefix raise. Only active tasks are searched — completed or
     trashed tasks will not resolve by prefix.
+
+    Resolution requires V2 auth (the ``get_all_tasks`` sync feed). With
+    V1-only auth the value passes through unchanged so the command's own V1
+    lookup handles it — full IDs still work; short prefixes are V2-only.
     """
     normalized = task_id.lower()
-    if len(normalized) >= 24 or not normalized or not set(normalized) <= _HEX_DIGITS:
+    # Pass through unless this is a hex prefix we can actually resolve: a full
+    # ID, a non-hex value, or V1-only auth (resolution needs the V2 sync feed).
+    if (
+        not client.has_v2
+        or len(normalized) >= 24
+        or not normalized
+        or not set(normalized) <= _HEX_DIGITS
+    ):
         return task_id
     candidates = [
         str(t["id"])

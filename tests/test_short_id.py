@@ -89,3 +89,13 @@ class TestShortIdResolution:
         assert result.exit_code == 0, result.output
         called_ids = [c.args[1] for c in mock_client.v1.complete_task.call_args_list]
         assert a in called_ids and b in called_ids
+
+    def test_v1_only_auth_passes_through(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        # Resolution needs the V2 sync feed; with V1-only auth a prefix must
+        # pass through to the command's V1 lookup, never calling get_all_tasks.
+        mock_client.has_v2 = False
+        mock_client.v1.get_task.return_value = _task("6830a1b2")
+        with _patch(mock_client):
+            result = runner.invoke(cli, ["task", "show", "6830a1b2"])
+        assert result.exit_code == 0, result.output
+        mock_client.get_all_tasks.assert_not_called()
