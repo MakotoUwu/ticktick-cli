@@ -32,6 +32,17 @@ class TestProjectEdit:
         )
         mock_client.v2.batch_projects.assert_not_called()
 
+    def test_edit_project_view_mode_prefers_v1(self, runner: CliRunner, mock_client: MagicMock) -> None:
+        with patch("ticktick_cli.commands.project_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["project", "edit", "proj1", "--view", "kanban"])
+
+        assert result.exit_code == 0
+        mock_client.v1.update_project.assert_called_once_with(
+            "proj1",
+            {"id": "proj1", "viewMode": "kanban"},
+        )
+        mock_client.v2.batch_projects.assert_not_called()
+
 
 class TestProjectCreate:
     def test_create_project_v2(self, runner: CliRunner, mock_client: MagicMock) -> None:

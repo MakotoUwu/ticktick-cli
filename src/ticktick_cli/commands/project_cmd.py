@@ -155,9 +155,17 @@ def project_show(ctx: click.Context, identifier: str) -> None:
 @click.argument("identifier")
 @click.option("--name", default=None)
 @click.option("--color", default=None)
+@click.option("--view", type=click.Choice(["list", "kanban", "timeline"]), default=None)
 @click.option("--folder", default=None, help="Folder ID (use 'none' to ungroup)")
 @click.pass_context
-def project_edit(ctx: click.Context, identifier: str, name: str | None, color: str | None, folder: str | None) -> None:
+def project_edit(
+    ctx: click.Context,
+    identifier: str,
+    name: str | None,
+    color: str | None,
+    view: str | None,
+    folder: str | None,
+) -> None:
     """Edit a project's properties."""
     client = get_client(ctx.obj.get("profile", "default"))
     try:
@@ -167,6 +175,8 @@ def project_edit(ctx: click.Context, identifier: str, name: str | None, color: s
             update["name"] = name
         if color:
             update["color"] = color
+        if view:
+            update["viewMode"] = view
         if folder:
             update["groupId"] = "NONE" if folder.lower() == "none" else folder
         if client.has_v1:
