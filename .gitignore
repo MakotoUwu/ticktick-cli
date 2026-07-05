@@ -21,3 +21,8 @@ htmlcov/
 output/playwright/
 debug/focus_state.json
 debug/index.html
+
+# Private / local-only agent context (personal data + local pointers; keep out of this repo)
+TICKTICK_WORKFLOW.md
+ticktick-context/
+CLAUDE.md
