@@ -45,6 +45,17 @@ _RECURRENCE_SKIP_PRESERVE_FIELDS = (
     "reminder",
     "reminders",
 )
+_V1_TASK_EDIT_FIELDS = {
+    "id",
+    "title",
+    "content",
+    "priority",
+    "dueDate",
+    "startDate",
+    "tags",
+    "projectId",
+    "columnId",
+}
 
 
 def _format_task(task: dict[str, Any]) -> dict[str, Any]:
@@ -413,14 +424,24 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
     if kwargs.get("project"):
         update["projectId"] = _resolve_project_id(client, kwargs["project"])
     try:
-        if client.has_v2:
-            # Need projectId for V2 update
-            if "projectId" not in update:
-                task = client.v2.get_task(task_id)
-                update["projectId"] = task.get("projectId", "")
-            client.v2.batch_tasks(update=[update])
-        else:
-            client.v1.update_task(task_id, update)
+        try:
+            if client.has_v2:
+                # Need projectId for V2 update
+                if "projectId" not in update:
+                    task = client.v2.get_task(task_id)
+                    update["projectId"] = task.get("projectId", "")
+                client.v2.batch_tasks(update=[update])
+            else:
+                client.v1.update_task(task_id, update)
+        except Exception as v2_error:
+            if not (_can_edit_task_with_v1(client, update) and _is_rate_limit_error(v2_error)):
+                raise
+            v1_update = {key: value for key, value in update.items() if key in _V1_TASK_EDIT_FIELDS}
+            if "projectId" not in v1_update:
+                task = _find_task_v1(client, task_id)
+                if task.get("projectId"):
+                    v1_update["projectId"] = task["projectId"]
+            client.v1.update_task(task_id, v1_update)
         output_message(f"Task {task_id} updated.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
@@ -1007,6 +1028,17 @@ def _resolve_project_id(client: Any, name_or_id: str) -> str:
         if proj.get("name", "").lower() == name_or_id.lower():
             return proj["id"]
     return name_or_id  # Fallback: treat as ID
+
+
+def _is_rate_limit_error(error: Exception) -> bool:
+    """Return whether an API error is a TickTick rate-limit failure."""
+    message = str(error).lower()
+    return "429" in message or "rate limit" in message
+
+
+def _can_edit_task_with_v1(client: Any, update: dict[str, Any]) -> bool:
+    """Return whether a task edit can fall back to the official V1 API."""
+    return bool(getattr(client, "has_v1", False)) and set(update).issubset(_V1_TASK_EDIT_FIELDS)
 
 
 def _looks_like_object_id(value: str) -> bool:

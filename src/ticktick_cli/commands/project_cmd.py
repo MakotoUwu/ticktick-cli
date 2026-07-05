@@ -169,15 +169,15 @@ def project_edit(ctx: click.Context, identifier: str, name: str | None, color: s
             update["color"] = color
         if folder:
             update["groupId"] = "NONE" if folder.lower() == "none" else folder
-        if client.has_v2:
+        if client.has_v1:
+            client.v1.update_project(pid, update)
+        elif client.has_v2:
             # V2 update requires name
             if "name" not in update:
                 projects = client.list_projects()
                 proj = next((p for p in projects if p["id"] == pid), {})
                 update["name"] = proj.get("name", "")
             client.v2.batch_projects(update=[update])
-        else:
-            client.v1.update_project(pid, update)
         output_message(f"Project {identifier} updated.", ctx)
     except Exception as e:
         output_error(str(e), ctx)
