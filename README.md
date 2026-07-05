@@ -123,6 +123,9 @@ ticktick auth login --client-id "$TICKTICK_CLIENT_ID" --client-secret "$TICKTICK
 # List your tasks (JSON)
 ticktick task list
 
+# List tasks inside a grouped folder without V2 sync lookup
+ticktick task list --folder-id FOLDER_ID --status uncompleted
+
 # Same thing, but as a rich table
 ticktick --human task list
 
@@ -278,6 +281,9 @@ ticktick task list --priority high | jq -r '.data[].title'
 
 # Count overdue tasks
 ticktick task overdue | jq '.count'
+
+# Count active tasks in a project folder/group
+ticktick task list --folder-id FOLDER_ID --status uncompleted | jq '.count'
 
 # Get habit names and streaks
 ticktick habit list | jq '.data[] | {name, currentStreak}'

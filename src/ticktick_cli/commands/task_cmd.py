@@ -274,6 +274,8 @@ def task_add(
 
 @task_group.command("list")
 @click.option("--project", "-p", default=None, help="Filter by project name or ID")
+@click.option("--folder", default=None, help="Filter by folder/group name or ID")
+@click.option("--folder-id", default=None, help="Filter by folder/group ID without V2 lookup")
 @click.option(
     "--status",
     type=click.Choice(["uncompleted", "completed", "abandoned", "all"]),
@@ -288,6 +290,8 @@ def task_add(
 def task_list(
     ctx: click.Context,
     project: str | None,
+    folder: str | None,
+    folder_id: str | None,
     status: str,
     priority: str | None,
     due: str | None,
@@ -296,26 +300,37 @@ def task_list(
     limit: int,
 ) -> None:
     """List tasks with optional filters."""
+    if project and (folder or folder_id):
+        raise click.UsageError("--project cannot be combined with --folder or --folder-id.")
+    if folder and folder_id:
+        raise click.UsageError("--folder and --folder-id are mutually exclusive.")
+
     client = get_client(ctx.obj.get("profile", "default"))
 
     try:
+        project_id = _resolve_project_id(client, project) if project else None
+        folder_project_ids: set[str] | None = None
+        if folder or folder_id:
+            resolved_folder_id = folder_id or _resolve_folder_id(client, folder or "")
+            folder_project_ids = _resolve_project_ids_for_folder(client, resolved_folder_id)
+
         if status == "completed" and client.has_v2:
             now = datetime.now()
             tasks = client.v2.get_completed_tasks(now - timedelta(days=365), now, limit=limit)
+        elif folder_project_ids is not None and client.has_v1:
+            tasks = _get_project_tasks_v1(client, folder_project_ids)
+        elif project_id and client.has_v1:
+            tasks = _get_project_tasks_v1(client, {project_id})
         elif client.has_v2:
             tasks = client.get_all_tasks()
         else:
-            # V1: need to list per project
-            projects = client.v1.list_projects()
-            tasks = []
-            for proj in projects:
-                data = client.v1.get_project_with_data(proj["id"])
-                tasks.extend(data.get("tasks", []))
+            tasks = _get_project_tasks_v1(client)
 
         # Apply filters
-        if project:
-            pid = _resolve_project_id(client, project)
-            tasks = [t for t in tasks if t.get("projectId") == pid]
+        if project_id:
+            tasks = [t for t in tasks if t.get("projectId") == project_id]
+        if folder_project_ids is not None:
+            tasks = [t for t in tasks if t.get("projectId") in folder_project_ids]
         if status == "uncompleted":
             tasks = [t for t in tasks if t.get("status", 0) == 0]
         elif status == "abandoned":
@@ -985,14 +1000,81 @@ def task_convert(ctx: click.Context, task_id: str, target_kind: str) -> None:
 
 def _resolve_project_id(client: Any, name_or_id: str) -> str:
     """Resolve project name to ID. If it looks like an ID, return as-is."""
-    if len(name_or_id) == 24 and name_or_id.isalnum():
+    if _looks_like_object_id(name_or_id):
         return name_or_id  # Likely a MongoDB-style ID
-    projects = client.list_projects() if hasattr(client, "list_projects") else []
+    projects = _list_projects(client)
     for proj in projects:
         if proj.get("name", "").lower() == name_or_id.lower():
             return proj["id"]
     return name_or_id  # Fallback: treat as ID
 
+
+def _looks_like_object_id(value: str) -> bool:
+    """Return whether a value looks like TickTick's 24-character object IDs."""
+    return len(value) == 24 and value.isalnum()
+
+
+def _list_projects(client: Any) -> list[dict[str, Any]]:
+    """List projects, preferring V1 because V2 sync can be rate-limited."""
+    if getattr(client, "has_v1", False):
+        return client.v1.list_projects()
+    if hasattr(client, "list_projects"):
+        return client.list_projects()
+    return []
+
+
+def _resolve_folder_id(client: Any, name_or_id: str) -> str:
+    """Resolve a folder/group name to ID when V2 sync is available."""
+    if _looks_like_object_id(name_or_id):
+        return name_or_id
+
+    try:
+        folders = client.get_all_project_groups()
+    except Exception as exc:
+        raise ValueError(
+            f"Could not resolve folder '{name_or_id}' by name because TickTick V2 sync failed. "
+            "Use --folder-id if you know the folder/group ID."
+        ) from exc
+
+    for folder in folders:
+        if folder.get("name", "").lower() == name_or_id.lower():
+            return folder["id"]
+    raise ValueError(f"Folder '{name_or_id}' not found. Use --folder-id if you know the folder/group ID.")
+
+
+def _resolve_project_ids_for_folder(client: Any, folder_id: str) -> set[str]:
+    """Return project IDs that belong to a TickTick folder/group."""
+    project_ids = {
+        project["id"]
+        for project in _list_projects(client)
+        if project.get("groupId") == folder_id and project.get("id")
+    }
+    if not project_ids:
+        raise ValueError(f"No projects found in folder/group {folder_id}.")
+    return project_ids
+
+
+def _get_project_tasks_v1(client: Any, project_ids: set[str] | None = None) -> list[dict[str, Any]]:
+    """Fetch tasks from V1 project data, preserving project/group context."""
+    tasks: list[dict[str, Any]] = []
+    for project in _list_projects(client):
+        project_id = project.get("id")
+        if not project_id or (project_ids is not None and project_id not in project_ids):
+            continue
+
+        data = client.v1.get_project_with_data(project_id)
+        project_data = data.get("project") or project
+        project_name = project_data.get("name") or project.get("name", "")
+        group_id = project_data.get("groupId") or project.get("groupId", "")
+
+        for raw_task in data.get("tasks", []):
+            task = dict(raw_task)
+            task.setdefault("projectId", project_id)
+            task.setdefault("projectName", project_name)
+            if group_id:
+                task.setdefault("groupId", group_id)
+            tasks.append(task)
+    return tasks
 
 
 def _filter_by_due(tasks: list[dict], due_filter: str) -> list[dict]:

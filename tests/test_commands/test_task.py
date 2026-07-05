@@ -91,6 +91,81 @@ class TestTaskList:
         assert data["data"][1]["title"] == "Second"
         assert data["data"][1]["sortOrder"] == 200
 
+    def test_list_tasks_with_folder_id_uses_v1_project_data(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.v1.list_projects.return_value = [
+            {"id": "proj1", "name": "To do", "groupId": "folder1"},
+            {"id": "proj2", "name": "Routine", "groupId": "other-folder"},
+        ]
+        mock_client.v1.get_project_with_data.return_value = {
+            "tasks": [
+                {
+                    "id": "task1",
+                    "title": "Check email",
+                    "status": 0,
+                    "priority": 0,
+                }
+            ]
+        }
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "list", "--folder-id", "folder1"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["count"] == 1
+        assert data["data"][0]["title"] == "Check email"
+        assert data["data"][0]["projectId"] == "proj1"
+        assert data["data"][0]["projectName"] == "To do"
+        assert data["data"][0]["groupId"] == "folder1"
+        mock_client.get_all_tasks.assert_not_called()
+
+    def test_list_tasks_with_folder_name_resolves_group(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.get_all_project_groups.return_value = [
+            {"id": "folder1", "name": "North Star"},
+        ]
+        mock_client.v1.list_projects.return_value = [
+            {"id": "proj1", "name": "Agents", "groupId": "folder1"},
+        ]
+        mock_client.v1.get_project_with_data.return_value = {
+            "project": {"id": "proj1", "name": "Agents", "groupId": "folder1"},
+            "tasks": [
+                {
+                    "id": "task-agent",
+                    "title": "Create speaker agent",
+                    "projectId": "proj1",
+                    "status": 0,
+                    "priority": 0,
+                }
+            ],
+        }
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "list", "--folder", "North Star"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["count"] == 1
+        assert data["data"][0]["title"] == "Create speaker agent"
+        mock_client.get_all_project_groups.assert_called_once()
+        mock_client.get_all_tasks.assert_not_called()
+
+    def test_list_tasks_with_folder_name_reports_v2_lookup_failure(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.get_all_project_groups.side_effect = Exception("API rate limit exceeded")
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "list", "--folder", "North Star"])
+
+        assert result.exit_code == 1
+        data = json.loads(result.stderr)
+        assert data["ok"] is False
+        assert "Use --folder-id" in data["error"]
+
 
 class TestTaskShow:
     def test_show_task(self, runner: CliRunner, mock_client: MagicMock) -> None:

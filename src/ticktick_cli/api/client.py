@@ -63,11 +63,11 @@ class TickTickClient:
     # ── Convenience: choose best API per operation ────────────
 
     def list_projects(self) -> list[dict[str, Any]]:
-        """List projects — prefers V2 (more metadata), falls back to V1."""
-        if self.has_v2:
-            state = self.v2.sync()
-            return state.get("projectProfiles", [])
-        return self.v1.list_projects()
+        """List projects — prefers official V1 to avoid rate-limited V2 sync."""
+        if self.has_v1:
+            return self.v1.list_projects()
+        state = self.v2.sync()
+        return state.get("projectProfiles", [])
 
     def get_all_tasks(self) -> list[dict[str, Any]]:
         """Get all uncompleted tasks — V2 only (V1 requires per-project)."""

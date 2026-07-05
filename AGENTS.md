@@ -23,7 +23,7 @@ If not authenticated, **ask the user** to run auth commands themselves — never
 ### Tasks
 
 ```bash
-ticktick task list [--limit N] [--priority high|medium|low|none] [--project PROJECT_ID] [--tag TAG] [--sort due|priority|title]
+ticktick task list [--limit N] [--priority high|medium|low|none] [--project PROJECT_ID] [--folder FOLDER] [--folder-id FOLDER_ID] [--tag TAG] [--sort due|priority|title]
 ticktick task today
 ticktick task overdue
 ticktick task search "QUERY"

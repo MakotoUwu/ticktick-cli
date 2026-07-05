@@ -33,6 +33,8 @@ class Task(BaseModel):
     status: int = TaskStatus.NORMAL
     priority: int = TaskPriority.NONE
     project_id: str = Field(default="", alias="projectId")
+    project_name: str | None = Field(default=None, alias="projectName")
+    group_id: str | None = Field(default=None, alias="groupId")
     due_date: str | None = Field(default=None, alias="dueDate")
     start_date: str | None = Field(default=None, alias="startDate")
     tags: list[str] = Field(default_factory=list)
@@ -106,6 +108,8 @@ class Task(BaseModel):
             "repeatFirstDate": self.repeat_first_date,
             "reminders": self.reminders,
             "commentCount": self.comment_count,
+            "projectName": self.project_name,
+            "groupId": self.group_id,
         }
         output.update({key: value for key, value in optional.items() if value is not None})
         return output
