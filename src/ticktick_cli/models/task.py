@@ -42,6 +42,7 @@ class Task(BaseModel):
     is_all_day: bool = Field(default=False, alias="isAllDay")
     parent_id: str | None = Field(default=None, alias="parentId")
     column_id: str | None = Field(default=None, alias="columnId")
+    column_name: str | None = Field(default=None, alias="columnName")
     pinned_time: str | None = Field(default=None, alias="pinnedTime")
     items: list[dict[str, Any]] = Field(default_factory=list)
     repeat_flag: str | None = Field(default=None, alias="repeatFlag")
@@ -110,6 +111,7 @@ class Task(BaseModel):
             "commentCount": self.comment_count,
             "projectName": self.project_name,
             "groupId": self.group_id,
+            "columnName": self.column_name,
         }
         output.update({key: value for key, value in optional.items() if value is not None})
         return output

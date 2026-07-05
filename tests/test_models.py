@@ -46,13 +46,14 @@ class TestTaskModel:
         assert Task(priority=5).priority_label == "high"
 
     def test_to_output(self) -> None:
-        task = Task(id="t1", title="Test", priority=3, status=2)
+        task = Task(id="t1", title="Test", priority=3, status=2, columnName="Top 3")
         out = task.to_output()
         assert out["id"] == "t1"
         assert out["status"] == "completed"
         assert out["priority"] == "medium"
         assert out["parentId"] is None
         assert out["columnId"] is None
+        assert out["columnName"] == "Top 3"
         assert out["pinnedTime"] is None
         assert out["sortOrder"] is None
 

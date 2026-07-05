@@ -76,6 +76,7 @@ def _format_task(task: dict[str, Any]) -> dict[str, Any]:
             "isAllDay": task.get("isAllDay", False),
             "parentId": task.get("parentId"),
             "columnId": task.get("columnId"),
+            "columnName": task.get("columnName"),
             "pinnedTime": task.get("pinnedTime"),
             "sortOrder": task.get("sortOrder"),
             "items": task.get("items", []),  # subtask checklist items
@@ -1098,6 +1099,11 @@ def _get_project_tasks_v1(client: Any, project_ids: set[str] | None = None) -> l
         project_data = data.get("project") or project
         project_name = project_data.get("name") or project.get("name", "")
         group_id = project_data.get("groupId") or project.get("groupId", "")
+        column_names = {
+            column.get("id"): column.get("name")
+            for column in data.get("columns", [])
+            if column.get("id")
+        }
 
         for raw_task in data.get("tasks", []):
             task = dict(raw_task)
@@ -1105,6 +1111,9 @@ def _get_project_tasks_v1(client: Any, project_ids: set[str] | None = None) -> l
             task.setdefault("projectName", project_name)
             if group_id:
                 task.setdefault("groupId", group_id)
+            column_id = task.get("columnId")
+            if column_id and column_id in column_names:
+                task.setdefault("columnName", column_names[column_id])
             tasks.append(task)
     return tasks
 

@@ -99,12 +99,14 @@ class TestTaskList:
             {"id": "proj2", "name": "Routine", "groupId": "other-folder"},
         ]
         mock_client.v1.get_project_with_data.return_value = {
+            "columns": [{"id": "col1", "name": "Top 3"}],
             "tasks": [
                 {
                     "id": "task1",
                     "title": "Check email",
                     "status": 0,
                     "priority": 0,
+                    "columnId": "col1",
                 }
             ]
         }
@@ -119,6 +121,8 @@ class TestTaskList:
         assert data["data"][0]["projectId"] == "proj1"
         assert data["data"][0]["projectName"] == "To do"
         assert data["data"][0]["groupId"] == "folder1"
+        assert data["data"][0]["columnId"] == "col1"
+        assert data["data"][0]["columnName"] == "Top 3"
         mock_client.get_all_tasks.assert_not_called()
 
     def test_list_tasks_with_folder_name_resolves_group(
