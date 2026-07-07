@@ -9,10 +9,12 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 
 from ticktick_cli import __version__
-from ticktick_cli.cli import cli
+from ticktick_cli.cli import cli, main
+from ticktick_cli.exceptions import RateLimitError
 
 
 def test_version_flag(runner: CliRunner) -> None:
@@ -218,3 +220,22 @@ def test_module_entrypoint_missing_auth_returns_json(tmp_path) -> None:
     assert data["ok"] is False
     assert data["exit_code"] == 3
     assert "Not authenticated" in data["error"]
+
+
+def test_main_rate_limit_returns_structured_json(capsys) -> None:
+    error = RateLimitError(
+        "API rate limit exceeded (429). Retry after 30s.",
+        status_code=429,
+        retry_after_seconds=30,
+    )
+
+    with patch("ticktick_cli.cli.cli", side_effect=error):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+    assert exc_info.value.code == 5
+    data = json.loads(capsys.readouterr().err)
+    assert data["ok"] is False
+    assert data["error_type"] == "RateLimitError"
+    assert data["status_code"] == 429
+    assert data["retry_after_seconds"] == 30

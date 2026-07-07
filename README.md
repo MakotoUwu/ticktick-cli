@@ -274,6 +274,8 @@ ticktick project delete PROJECT_ID --yes
 
 **Deterministic exit codes** -- agents can check `$?` to determine success/failure without parsing output.
 
+**Rate-limit aware** -- HTTP 429 responses are retried with bounded backoff. If TickTick is still rate-limiting, the CLI exits with code `5` and returns a typed JSON error such as `{"error_type":"RateLimitError","status_code":429}` plus `retry_after_seconds` when the server provides a `Retry-After` header.
+
 **Pipe-friendly** -- combine with `jq` for complex queries:
 ```bash
 # Get titles of all high-priority tasks

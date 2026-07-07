@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import click
@@ -16,6 +16,7 @@ from ticktick_cli.api.v2 import (
 )
 from ticktick_cli.auth import get_client
 from ticktick_cli.dates import parse_date
+from ticktick_cli.exceptions import TickTickCLIError, handle_cli_error
 from ticktick_cli.models.comment import Activity, Comment
 from ticktick_cli.models.task import Task
 from ticktick_cli.output import (
@@ -56,6 +57,14 @@ _V1_TASK_EDIT_FIELDS = {
     "projectId",
     "columnId",
 }
+
+
+def _handle_task_error(error: Exception, ctx: click.Context) -> NoReturn:
+    """Preserve typed CLI errors while keeping generic task errors formatted."""
+    if isinstance(error, TickTickCLIError):
+        handle_cli_error(error)
+    output_error(str(error), ctx)
+    raise SystemExit(1) from None
 
 
 def _format_task(task: dict[str, Any]) -> dict[str, Any]:
@@ -260,8 +269,7 @@ def task_add(
                     output_existing_item(_format_task(t), ctx)
                     return
         except Exception as e:
-            output_error(str(e), ctx)
-            raise SystemExit(1) from None
+            _handle_task_error(e, ctx)
 
     if project:
         task_data["projectId"] = _resolve_project_id(client, project)
@@ -280,8 +288,7 @@ def task_add(
                 message=f"Task created: {result.get('title', title)}",
             )
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("list")
@@ -363,8 +370,7 @@ def task_list(
         columns = ["id", "title", "priority", "dueDate", "projectId", "tags"]
         output_list(formatted, columns=columns, title="Tasks", ctx=ctx, limit=limit)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("show")
@@ -381,8 +387,7 @@ def task_show(ctx: click.Context, task_id: str) -> None:
             task = _find_task_v1(client, task_id)
         output_item(_format_task(task), ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("edit")
@@ -445,8 +450,7 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
             client.v1.update_task(task_id, v1_update)
         output_message(f"Task {task_id} updated.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("done")
@@ -472,8 +476,7 @@ def task_done(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
             client.v2.batch_tasks(update=updates)
         output_message(f"Completed {len(task_ids)} task(s).", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("abandon")
@@ -494,8 +497,7 @@ def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
         client.v2.batch_tasks(update=updates)
         output_message(f"Abandoned {len(task_ids)} task(s).", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("skip")
@@ -532,8 +534,7 @@ def task_skip(ctx: click.Context, task_id: str, occurrence_date: str | None) -> 
         client.v2.skip_task_recurrence(update)
         output_item(details, ctx, message=f"Skipped recurrence {ex_date} for task {task_id}.")
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("delete")
@@ -562,8 +563,7 @@ def task_delete(ctx: click.Context, task_ids: tuple[str, ...], yes: bool) -> Non
                 client.v1.delete_task(task["projectId"], tid)
         output_message(f"Deleted {len(task_ids)} task(s).", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("move")
@@ -587,8 +587,7 @@ def task_move(ctx: click.Context, task_id: str, project: str) -> None:
         }])
         output_message(f"Task {task_id} moved to {project}.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("search")
@@ -633,8 +632,7 @@ def task_search(
             limit=limit,
         )
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("today")
@@ -673,8 +671,7 @@ def task_completed(ctx: click.Context, from_date: str | None, to_date: str | Non
             limit=limit,
         )
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("trash")
@@ -695,8 +692,7 @@ def task_trash(ctx: click.Context, limit: int) -> None:
             limit=limit,
         )
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("pin")
@@ -719,8 +715,7 @@ def task_pin(ctx: click.Context, task_id: str) -> None:
         }])
         output_message(f"Task {task_id} pinned.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("unpin")
@@ -742,8 +737,7 @@ def task_unpin(ctx: click.Context, task_id: str) -> None:
         }])
         output_message(f"Task {task_id} unpinned.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @task_group.command("batch-add")
@@ -770,8 +764,7 @@ def task_batch_add(ctx: click.Context, filepath: str) -> None:
         client.v2.batch_tasks(add=tasks)
         output_message(f"Created {len(tasks)} task(s) from {filepath}.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 # ── Attachment subgroup ───────────────────────────────────────
@@ -798,8 +791,7 @@ def attachment_list(ctx: click.Context, task_id: str) -> None:
             ctx=ctx,
         )
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @attachment_group.command("add")
@@ -858,8 +850,7 @@ def attachment_add(
         attachment["contentLinked"] = result.get("contentLinked", False)
         output_item(attachment, ctx, message="Attachment added.")
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 # ── Comment subgroup ──────────────────────────────────────────
@@ -885,8 +876,7 @@ def comment_list(ctx: click.Context, task_id: str, project_id: str | None) -> No
         comments = [Comment(**c).to_output() for c in raw]
         output_list(comments, columns=["id", "title", "createdTime"], title="Comments", ctx=ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @comment_group.command("add")
@@ -907,8 +897,7 @@ def comment_add(ctx: click.Context, task_id: str, text: str, project_id: str | N
         client.v2.create_task_comment(project_id, task_id, text)
         output_message("Comment added.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 @comment_group.command("delete")
@@ -933,8 +922,7 @@ def comment_delete(ctx: click.Context, task_id: str, comment_id: str, project_id
         client.v2.delete_task_comment(project_id, task_id, comment_id)
         output_message("Comment deleted.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 # ── Activity command ──────────────────────────────────────────
@@ -951,8 +939,7 @@ def task_activity(ctx: click.Context, task_id: str) -> None:
         activities = [Activity(**a).to_output() for a in raw]
         output_list(activities, columns=["id", "action", "when"], title="Activities", ctx=ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 # ── Duplicate command ─────────────────────────────────────────
@@ -978,8 +965,7 @@ def task_duplicate(ctx: click.Context, task_id: str) -> None:
         client.v2.batch_tasks(add=[new_task])
         output_message(f"Task duplicated. New ID: {new_task['id']}", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 # ── Convert (task ↔ note) ─────────────────────────────────────
@@ -1013,8 +999,7 @@ def task_convert(ctx: click.Context, task_id: str, target_kind: str) -> None:
         }])
         output_message(f"Task {task_id} converted to {target_kind}.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_task_error(e, ctx)
 
 
 # ── Helpers ───────────────────────────────────────────────────

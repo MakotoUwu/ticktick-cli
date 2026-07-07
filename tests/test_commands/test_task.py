@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from ticktick_cli.cli import cli
+from ticktick_cli.exceptions import RateLimitError
 
 
 class TestTaskList:
@@ -425,6 +426,27 @@ class TestTaskSearch:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert [task["id"] for task in data["data"]] == ["task1"]
+
+    def test_search_preserves_rate_limit_error(
+        self,
+        runner: CliRunner,
+        mock_client: MagicMock,
+    ) -> None:
+        mock_client.get_all_tasks.side_effect = RateLimitError(
+            "API rate limit exceeded (429). Retry after 30s.",
+            status_code=429,
+            retry_after_seconds=30,
+        )
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "search", "Louis"])
+
+        assert result.exit_code == 5
+        data = json.loads(result.stderr)
+        assert data["ok"] is False
+        assert data["error_type"] == "RateLimitError"
+        assert data["status_code"] == 429
+        assert data["retry_after_seconds"] == 30
 
 
 class TestTaskMove:

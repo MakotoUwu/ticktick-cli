@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -22,6 +24,43 @@ logger = logging.getLogger(__name__)
 _RETRYABLE_STATUS = {502, 503, 504}
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 1.0  # seconds: 1s, 2s, 4s
+_RATE_LIMIT_MAX_WAIT = 60.0
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Parse a Retry-After header into seconds."""
+    if not value:
+        return None
+    token = value.strip()
+    if not token:
+        return None
+    try:
+        return max(0.0, float(token))
+    except ValueError:
+        pass
+    try:
+        retry_at = parsedate_to_datetime(token)
+    except (TypeError, ValueError):
+        return None
+    if retry_at.tzinfo is None:
+        retry_at = retry_at.replace(tzinfo=timezone.utc)
+    return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+
+
+def _bounded_wait(seconds: float) -> float:
+    """Keep server-directed waits useful without letting one CLI call hang forever."""
+    return min(max(0.0, seconds), _RATE_LIMIT_MAX_WAIT)
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    return _parse_retry_after(response.headers.get("Retry-After"))
+
+
+def _rate_limit_wait(response: httpx.Response, attempt: int) -> float:
+    retry_after = _retry_after_seconds(response)
+    if retry_after is not None:
+        return _bounded_wait(retry_after)
+    return _BACKOFF_BASE * (2 ** attempt)
 
 
 class BaseClient:
@@ -64,16 +103,24 @@ class BaseClient:
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
                 last_exc = exc
                 wait = _BACKOFF_BASE * (2 ** attempt)
-                logger.warning("Request failed (attempt %d/%d): %s — retrying in %.1fs",
-                               attempt + 1, _MAX_RETRIES, exc, wait)
+                logger.debug("Request failed (attempt %d/%d): %s — retrying in %.1fs",
+                             attempt + 1, _MAX_RETRIES, exc, wait)
                 time.sleep(wait)
                 continue
 
             # Retry on transient server errors
             if response.status_code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES - 1:
                 wait = _BACKOFF_BASE * (2 ** attempt)
-                logger.warning("HTTP %d (attempt %d/%d) — retrying in %.1fs",
-                               response.status_code, attempt + 1, _MAX_RETRIES, wait)
+                logger.debug("HTTP %d (attempt %d/%d) — retrying in %.1fs",
+                             response.status_code, attempt + 1, _MAX_RETRIES, wait)
+                time.sleep(wait)
+                continue
+
+            # Respect server-side rate limiting when TickTick tells us to slow down.
+            if response.status_code == 429 and attempt < _MAX_RETRIES - 1:
+                wait = _rate_limit_wait(response, attempt)
+                logger.debug("HTTP 429 rate limited (attempt %d/%d) — retrying in %.1fs",
+                             attempt + 1, _MAX_RETRIES, wait)
                 time.sleep(wait)
                 continue
 
@@ -89,7 +136,19 @@ class BaseClient:
                 "Authentication failed (401). Run `ticktick auth login` first."
             )
         if response.status_code == 429:
-            raise RateLimitError("API rate limit exceeded (429). Try again later.")
+            retry_after = _retry_after_seconds(response)
+            body = response.text[:200] if response.text else ""
+            suffix = (
+                f" Retry after {retry_after:.0f}s."
+                if retry_after is not None
+                else " Try again later."
+            )
+            raise RateLimitError(
+                f"API rate limit exceeded (429).{suffix}",
+                status_code=429,
+                response_body=body,
+                retry_after_seconds=retry_after,
+            )
         if response.status_code == 404:
             raise NotFoundError(f"Resource not found: {path}", status_code=404)
         if response.status_code == 409:

@@ -168,7 +168,7 @@ def version_command(ctx: click.Context) -> None:
 
 def main() -> None:
     """Entry point."""
-    from ticktick_cli.exceptions import TickTickCLIError
+    from ticktick_cli.exceptions import APIError, RateLimitError, TickTickCLIError
 
     try:
         cli(standalone_mode=False)
@@ -185,7 +185,16 @@ def main() -> None:
         click.echo(json.dumps(payload), err=True)
         sys.exit(e.exit_code)
     except TickTickCLIError as e:
-        payload: dict[str, object] = {"ok": False, "error": str(e), "exit_code": e.exit_code}
+        payload: dict[str, object] = {
+            "ok": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "exit_code": e.exit_code,
+        }
+        if isinstance(e, APIError) and e.status_code:
+            payload["status_code"] = e.status_code
+        if isinstance(e, RateLimitError) and e.retry_after_seconds is not None:
+            payload["retry_after_seconds"] = e.retry_after_seconds
         click.echo(json.dumps(payload), err=True)
         sys.exit(e.exit_code)
     except Exception as e:

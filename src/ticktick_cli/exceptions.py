@@ -59,6 +59,16 @@ class RateLimitError(APIError):
 
     exit_code = 5
 
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        response_body: str | None = None,
+        retry_after_seconds: float | None = None,
+    ) -> None:
+        super().__init__(message, status_code=status_code, response_body=response_body)
+        self.retry_after_seconds = retry_after_seconds
+
 
 class ConflictError(APIError):
     """Conflict — resource already exists (409)."""
@@ -97,6 +107,8 @@ def handle_cli_error(error: TickTickCLIError) -> None:
     }
     if isinstance(error, APIError) and error.status_code:
         output["status_code"] = error.status_code
+    if isinstance(error, RateLimitError) and error.retry_after_seconds is not None:
+        output["retry_after_seconds"] = error.retry_after_seconds
     suggestion = _exit_code_suggestion(error)
     if suggestion:
         output["suggestion"] = suggestion

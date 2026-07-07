@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from ticktick_cli.api.base import _BACKOFF_BASE, _MAX_RETRIES, _RETRYABLE_STATUS, BaseClient
+from ticktick_cli.api.base import (
+    _BACKOFF_BASE,
+    _MAX_RETRIES,
+    _RETRYABLE_STATUS,
+    BaseClient,
+)
 from ticktick_cli.exceptions import APIError, AuthenticationError, NotFoundError, RateLimitError
 
 
@@ -20,6 +25,7 @@ class TestHandleResponse:
         resp.text = text
         resp.content = text.encode() if text else (b'{}' if json_data else b'')
         resp.json.return_value = json_data or {}
+        resp.headers = {}
         return resp
 
     def test_401_raises_auth_error(self) -> None:
@@ -29,8 +35,20 @@ class TestHandleResponse:
 
     def test_429_raises_rate_limit(self) -> None:
         client = BaseClient("https://example.com")
-        with pytest.raises(RateLimitError, match="429"):
+        with pytest.raises(RateLimitError, match="429") as exc_info:
             client._handle_response(self._make_response(429), "/test")
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.retry_after_seconds is None
+
+    def test_429_preserves_retry_after_header(self) -> None:
+        client = BaseClient("https://example.com")
+        response = self._make_response(429)
+        response.headers = {"Retry-After": "42"}
+
+        with pytest.raises(RateLimitError, match="Retry after 42s") as exc_info:
+            client._handle_response(response, "/test")
+
+        assert exc_info.value.retry_after_seconds == 42
 
     def test_404_raises_not_found(self) -> None:
         client = BaseClient("https://example.com")
@@ -73,6 +91,58 @@ class TestRetryLogic:
         with patch.object(client._http, "request", return_value=mock_resp):
             result = client._request("GET", "/test")
         assert result == {"ok": True}
+
+    @patch("ticktick_cli.api.base.time.sleep")
+    def test_retries_on_429_with_retry_after(self, mock_sleep: MagicMock) -> None:
+        client = BaseClient("https://example.com")
+
+        bad_resp = MagicMock(spec=httpx.Response)
+        bad_resp.status_code = 429
+        bad_resp.headers = {"Retry-After": "5"}
+        good_resp = MagicMock(spec=httpx.Response)
+        good_resp.status_code = 200
+        good_resp.content = b'{"ok": true}'
+        good_resp.json.return_value = {"ok": True}
+
+        with patch.object(client._http, "request", side_effect=[bad_resp, good_resp]):
+            result = client._request("GET", "/test")
+
+        assert result == {"ok": True}
+        mock_sleep.assert_called_once_with(5.0)
+
+    @patch("ticktick_cli.api.base.time.sleep")
+    def test_retries_on_429_without_retry_after_uses_backoff(self, mock_sleep: MagicMock) -> None:
+        client = BaseClient("https://example.com")
+
+        bad_resp = MagicMock(spec=httpx.Response)
+        bad_resp.status_code = 429
+        bad_resp.headers = {}
+        good_resp = MagicMock(spec=httpx.Response)
+        good_resp.status_code = 200
+        good_resp.content = b'{"ok": true}'
+        good_resp.json.return_value = {"ok": True}
+
+        with patch.object(client._http, "request", side_effect=[bad_resp, good_resp]):
+            result = client._request("GET", "/test")
+
+        assert result == {"ok": True}
+        mock_sleep.assert_called_once_with(_BACKOFF_BASE)
+
+    @patch("ticktick_cli.api.base.time.sleep")
+    def test_exhausted_429_preserves_retry_after(self, mock_sleep: MagicMock) -> None:
+        client = BaseClient("https://example.com")
+        bad_resp = MagicMock(spec=httpx.Response)
+        bad_resp.status_code = 429
+        bad_resp.text = ""
+        bad_resp.headers = {"Retry-After": "7"}
+
+        with patch.object(client._http, "request", return_value=bad_resp):
+            with pytest.raises(RateLimitError) as exc_info:
+                client._request("GET", "/test")
+
+        assert mock_sleep.call_count == _MAX_RETRIES - 1
+        assert [c.args[0] for c in mock_sleep.call_args_list] == [7.0, 7.0]
+        assert exc_info.value.retry_after_seconds == 7
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_502(self, mock_sleep: MagicMock) -> None:
