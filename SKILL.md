@@ -157,6 +157,11 @@ ticktick habit history HABIT_ID --days 30
 ```bash
 ticktick focus start --duration 25 --note "deep work"
 ticktick focus status
+ticktick focus pause
+ticktick focus resume
+ticktick focus finish
+ticktick focus start-break --duration 5
+ticktick focus skip-break
 ticktick focus stop --save
 ticktick focus stats
 ticktick focus heatmap --days 30

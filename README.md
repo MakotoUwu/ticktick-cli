@@ -34,7 +34,7 @@ The [emerging consensus](https://steipete.me/posts/2025/peekaboo-2-freeing-the-c
 - **`--human` flag** -- switch to rich terminal tables with a single flag
 - **100% API coverage** -- tasks, subtasks, projects, folders, tags, kanban columns, habits, focus/pomodoro (including live timer), filters, templates, user profile
 - **Dual API support** -- V1 (official OAuth 2.0) + V2 (unofficial session-based) for full feature access
-- **Focus timer control** -- start, stop, log, and delete pomodoro sessions directly from CLI
+- **Focus timer control** -- start, pause, resume, finish, rest, stop, log, and delete pomodoro sessions directly from CLI
 - **Multiple output formats** -- JSON (default), CSV, YAML, or rich terminal tables (`--human`)
 - **Natural language dates** -- `--due tomorrow`, `--start "next monday"`, `--due "in 3 days"`
 - **Agent-friendly design** -- no interactive prompts, `--yes` flags, `--dry-run`, deterministic exit codes (0-6)
@@ -143,6 +143,11 @@ ticktick --human habit list
 
 # Start a 25-minute focus session
 ticktick focus start --duration 25
+ticktick focus pause
+ticktick focus resume
+ticktick focus finish
+ticktick focus start-break --duration 5
+ticktick focus skip-break
 
 # Inspect linked calendar accounts
 ticktick calendar account list
@@ -214,7 +219,7 @@ ticktick sync
 | **Tags** | `list` `create` `edit` `rename` `merge` `delete` | V2 |
 | **Kanban** | `column list` `create` `edit` `delete` | V2 |
 | **Habits** | `list` `show` `create` `edit` `delete` `checkin` `history` `archive` `unarchive` | V2 |
-| **Focus** | `start` `stop` `status` `log` `delete` `stats` `heatmap` `by-tag` | V2 |
+| **Focus** | `start` `pause` `resume` `finish` `abandon` `start-break` `skip-break` `stop` `status` `log` `delete` `stats` `heatmap` `by-tag` | V2 |
 | **Filters** | `list` `show` `create` `edit` `delete` | V2 |
 | **Templates** | `list` `show` `create` `delete` | V2 |
 | **User** | `profile` `status` `stats` `preferences` | V2 |

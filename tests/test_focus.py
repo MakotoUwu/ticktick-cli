@@ -346,6 +346,108 @@ class TestFocusStop:
         assert data["dry_run"] is True
 
 
+class TestFocusLiveControls:
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_pause_sends_pause_operation(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"id": "sess1", "exited": False, "status": 0}},
+            {"point": 101, "current": {"id": "sess1", "status": 1}},
+        ]
+
+        result = CliRunner().invoke(focus_group, ["pause"], obj=_make_ctx())
+
+        assert result.exit_code == 0
+        op = client.v2.focus_op.call_args_list[1].kwargs["operations"][0]
+        assert op["op"] == "pause"
+        assert json.loads(result.output)["data"]["operation"] == "pause"
+
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_resume_sends_continue_operation(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"id": "sess1", "exited": False, "status": 1}},
+            {"point": 101, "current": {"id": "sess1", "status": 0}},
+        ]
+
+        result = CliRunner().invoke(focus_group, ["resume"], obj=_make_ctx())
+
+        assert result.exit_code == 0
+        op = client.v2.focus_op.call_args_list[1].kwargs["operations"][0]
+        assert op["op"] == "continue"
+        assert json.loads(result.output)["data"]["operation"] == "continue"
+
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_finish_sends_finish_operation(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"id": "sess1", "exited": False, "status": 0}},
+            {"point": 101, "current": {"id": "sess1", "status": 3}},
+        ]
+
+        result = CliRunner().invoke(focus_group, ["finish"], obj=_make_ctx())
+
+        assert result.exit_code == 0
+        op = client.v2.focus_op.call_args_list[1].kwargs["operations"][0]
+        assert op["op"] == "finish"
+
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_abandon_sends_drop_operation(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"id": "sess1", "exited": False, "status": 0}},
+            {"point": 101, "current": {"id": "sess1", "exited": True}},
+        ]
+
+        result = CliRunner().invoke(focus_group, ["abandon"], obj=_make_ctx())
+
+        assert result.exit_code == 0
+        op = client.v2.focus_op.call_args_list[1].kwargs["operations"][0]
+        assert op["op"] == "drop"
+
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_start_break_sends_start_break_operation(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"id": "sess1", "exited": False, "status": 3}},
+            {"point": 101, "current": {"id": "sess1", "status": 2}},
+        ]
+
+        result = CliRunner().invoke(
+            focus_group, ["start-break", "--duration", "7"], obj=_make_ctx()
+        )
+
+        assert result.exit_code == 0
+        op = client.v2.focus_op.call_args_list[1].kwargs["operations"][0]
+        assert op["op"] == "startBreak"
+        assert op["duration"] == 7
+
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_skip_break_sends_end_break_operation(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"id": "sess1", "exited": False, "status": 2}},
+            {"point": 101, "current": {"id": "sess1", "status": 3}},
+        ]
+
+        result = CliRunner().invoke(focus_group, ["skip-break"], obj=_make_ctx())
+
+        assert result.exit_code == 0
+        op = client.v2.focus_op.call_args_list[1].kwargs["operations"][0]
+        assert op["op"] == "endBreak"
+
+    def test_pause_dry_run(self) -> None:
+        result = CliRunner().invoke(focus_group, ["pause"], obj=_make_ctx(dry_run=True))
+        assert result.exit_code == 0
+        assert json.loads(result.output)["dry_run"] is True
+
+
 class TestFocusStatus:
     @patch("ticktick_cli.commands.focus_cmd.get_client")
     def test_status_idle(self, mock_get: MagicMock) -> None:

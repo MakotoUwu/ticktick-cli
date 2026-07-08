@@ -115,6 +115,12 @@ ticktick column delete COLUMN_ID --project PROJECT_ID --yes
 
 ```bash
 ticktick focus start [--duration 25] [--note "deep work"] [--task TASK_ID]  # Start timer
+ticktick focus pause                                           # Pause timer
+ticktick focus resume                                          # Continue paused timer
+ticktick focus finish                                          # Finish/save timer
+ticktick focus abandon                                         # Drop timer without saving
+ticktick focus start-break [--duration 5]                      # Start rest break
+ticktick focus skip-break                                      # End active rest break
 ticktick focus stop [--save/--no-save]                         # Stop timer
 ticktick focus status                                          # Current timer state
 ticktick focus log --start HH:MM --end HH:MM [--note "note"]  # Log past session
@@ -317,7 +323,7 @@ ticktick task list --due this-week
 - Creating tasks, projects, tags, habits, filters, templates (`add`, `create`)
 - Editing or moving tasks (`edit`, `move`, `convert`, `skip`, `attachment add`)
 - Checking in habits (`checkin`)
-- Starting/stopping focus timer (`focus start`, `focus stop`)
+- Starting, pausing, resuming, finishing, or stopping focus timer (`focus start`, `focus pause`, `focus resume`, `focus finish`, `focus stop`)
 - Logging focus records (`focus log`)
 
 ### Never do without explicit confirmation

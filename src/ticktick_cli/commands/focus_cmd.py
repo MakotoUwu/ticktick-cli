@@ -34,6 +34,107 @@ def _fmt_utc(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime(_UTC_FMT)
 
 
+def _focus_task_id(current: dict[str, Any]) -> str:
+    for key in ("focusTasks", "focusOnLogs"):
+        for item in current.get(key) or []:
+            if item.get("id"):
+                return item["id"]
+    return current.get("focusOnId") or ""
+
+
+def _focus_operation(
+    current: dict[str, Any],
+    op: str,
+    when: datetime | None = None,
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Build a TickTick web focus operation.
+
+    Chrome inspection of TickTick's web app showed these Pomo operations:
+    pause, continue, finish, drop, startBreak, endBreak, exit.
+    """
+
+    when = when or _utcnow()
+    session_id = current.get("id") or _generate_object_id()
+    first_id = current.get("firstId") or current.get("firstFocusId") or session_id
+    task_id = _focus_task_id(current)
+    return {
+        "id": _generate_object_id(),
+        "oId": session_id,
+        "oType": overrides.pop("oType", current.get("oType", 0)),
+        "op": op,
+        "duration": overrides.pop("duration", current.get("duration", 25)),
+        "firstFocusId": overrides.pop("firstFocusId", first_id),
+        "focusOnId": overrides.pop("focusOnId", task_id),
+        "autoPomoLeft": overrides.pop("autoPomoLeft", current.get("autoPomoLeft", 5)),
+        "pomoCount": overrides.pop("pomoCount", current.get("pomoCount", 1)),
+        "manual": overrides.pop("manual", True),
+        "note": overrides.pop("note", current.get("note", "")),
+        "time": _fmt_utc(when),
+        **overrides,
+    }
+
+
+def _current_focus(client: Any) -> tuple[int, dict[str, Any]]:
+    state = client.v2.focus_op(last_point=0, operations=[])
+    return state.get("point", 0), state.get("current", {})
+
+
+def _require_focus(current: dict[str, Any]) -> None:
+    if not current or current.get("exited", True):
+        raise click.ClickException("No active focus session.")
+
+
+def _run_focus_control(client: Any, action: str, *, duration: int | None = None) -> dict[str, Any]:
+    last_point, current = _current_focus(client)
+    _require_focus(current)
+
+    status = current.get("status", 0)
+    now = _utcnow()
+    if action == "pause":
+        if status != 0:
+            raise click.ClickException("Focus session is not running.")
+        op = _focus_operation(current, "pause", now)
+    elif action == "resume":
+        if status != 1:
+            raise click.ClickException("Focus session is not paused.")
+        op = _focus_operation(current, "continue", now)
+    elif action == "finish":
+        if status not in (0, 1):
+            raise click.ClickException("Focus session is not running or paused.")
+        op = _focus_operation(current, "finish", now)
+    elif action == "abandon":
+        if status not in (0, 1):
+            raise click.ClickException("Focus session is not running or paused.")
+        op = _focus_operation(current, "drop", now)
+    elif action == "start-break":
+        op = _focus_operation(current, "startBreak", now, duration=duration or 5)
+    elif action == "skip-break":
+        if status != 2:
+            raise click.ClickException("No active break to skip.")
+        op = _focus_operation(current, "endBreak", now)
+    else:
+        raise click.ClickException(f"Unsupported focus action: {action}")
+
+    result = client.v2.focus_op(last_point=last_point, operations=[op])
+    return {
+        "action": action,
+        "sessionId": current.get("id", ""),
+        "operation": op["op"],
+        "ticktickPoint": result.get("point"),
+    }
+
+
+def run_focus_control(client: Any, action: str, *, duration: int | None = None) -> dict[str, Any]:
+    """Run a live TickTick focus timer control operation.
+
+    This helper is intentionally importable by local operator surfaces such as
+    Mission Control's macOS menu-bar tracker.
+    """
+
+    return _run_focus_control(client, action, duration=duration)
+
+
 def _resolve_date_range(
     from_date: str | None, to_date: str | None, days: int
 ) -> tuple[date, date]:
@@ -52,7 +153,7 @@ def _resolve_date_range(
 
 @click.group("focus")
 def focus_group() -> None:
-    """Focus / Pomodoro — start, stop, log, delete, status, stats (V2)."""
+    """Focus / Pomodoro — timer controls, log, delete, status, stats (V2)."""
 
 
 # ── start ────────────────────────────────────────────────────
@@ -246,6 +347,118 @@ def focus_stop(ctx: click.Context, save: bool) -> None:
         output_item({"action": action, "sessionId": session_id}, ctx)
     except SystemExit:
         raise
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+# ── live controls ────────────────────────────────────────────
+
+
+@focus_group.command("pause")
+@click.pass_context
+def focus_pause(ctx: click.Context) -> None:
+    """Pause the current Pomodoro focus timer."""
+    if is_dry_run(ctx):
+        output_dry_run("focus pause", {}, ctx)
+        return
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        output_item(_run_focus_control(client, "pause"), ctx)
+    except click.ClickException as e:
+        output_error(e.message, ctx)
+        raise SystemExit(1) from None
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@focus_group.command("resume")
+@click.pass_context
+def focus_resume(ctx: click.Context) -> None:
+    """Continue a paused Pomodoro focus timer."""
+    if is_dry_run(ctx):
+        output_dry_run("focus resume", {}, ctx)
+        return
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        output_item(_run_focus_control(client, "resume"), ctx)
+    except click.ClickException as e:
+        output_error(e.message, ctx)
+        raise SystemExit(1) from None
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@focus_group.command("finish")
+@click.pass_context
+def focus_finish(ctx: click.Context) -> None:
+    """Finish and save the current Pomodoro focus timer."""
+    if is_dry_run(ctx):
+        output_dry_run("focus finish", {}, ctx)
+        return
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        output_item(_run_focus_control(client, "finish"), ctx)
+    except click.ClickException as e:
+        output_error(e.message, ctx)
+        raise SystemExit(1) from None
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@focus_group.command("abandon")
+@click.pass_context
+def focus_abandon(ctx: click.Context) -> None:
+    """Drop the current Pomodoro focus timer without saving it."""
+    if is_dry_run(ctx):
+        output_dry_run("focus abandon", {}, ctx)
+        return
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        output_item(_run_focus_control(client, "abandon"), ctx)
+    except click.ClickException as e:
+        output_error(e.message, ctx)
+        raise SystemExit(1) from None
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@focus_group.command("start-break")
+@click.option("--duration", "-d", type=int, default=5, help="Break duration in minutes (default: 5).")
+@click.pass_context
+def focus_start_break(ctx: click.Context, duration: int) -> None:
+    """Start a rest break after a Pomodoro focus timer."""
+    if is_dry_run(ctx):
+        output_dry_run("focus start-break", {"duration": duration}, ctx)
+        return
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        output_item(_run_focus_control(client, "start-break", duration=duration), ctx)
+    except click.ClickException as e:
+        output_error(e.message, ctx)
+        raise SystemExit(1) from None
+    except Exception as e:
+        output_error(str(e), ctx)
+        raise SystemExit(1) from None
+
+
+@focus_group.command("skip-break")
+@click.pass_context
+def focus_skip_break(ctx: click.Context) -> None:
+    """End the current Pomodoro rest break."""
+    if is_dry_run(ctx):
+        output_dry_run("focus skip-break", {}, ctx)
+        return
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        output_item(_run_focus_control(client, "skip-break"), ctx)
+    except click.ClickException as e:
+        output_error(e.message, ctx)
+        raise SystemExit(1) from None
     except Exception as e:
         output_error(str(e), ctx)
         raise SystemExit(1) from None
