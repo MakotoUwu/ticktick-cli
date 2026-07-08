@@ -279,7 +279,7 @@ ticktick project delete PROJECT_ID --yes
 
 **Deterministic exit codes** -- agents can check `$?` to determine success/failure without parsing output.
 
-**Rate-limit aware** -- HTTP 429 responses are retried with bounded backoff. If TickTick is still rate-limiting, the CLI exits with code `5` and returns a typed JSON error such as `{"error_type":"RateLimitError","status_code":429}` plus `retry_after_seconds` when the server provides a `Retry-After` header.
+**Rate-limit aware** -- sequential HTTP calls are paced before TickTick starts returning 429s, and HTTP 429 responses are retried with bounded backoff. If TickTick is still rate-limiting, the CLI exits with code `5` and returns a typed JSON error such as `{"error_type":"RateLimitError","status_code":429}` plus `retry_after_seconds` when the server provides a `Retry-After` header. Tune or disable the proactive pacing with `TICKTICK_MIN_REQUEST_INTERVAL` seconds, for example `TICKTICK_MIN_REQUEST_INTERVAL=0`.
 
 **Pipe-friendly** -- combine with `jq` for complex queries:
 ```bash
@@ -296,12 +296,13 @@ ticktick task list --folder-id FOLDER_ID --status uncompleted | jq '.count'
 ticktick habit list | jq '.data[] | {name, currentStreak}'
 ```
 
-**Environment variables for auth** -- no secrets in command args:
+**Environment variables** -- keep secrets out of command args and tune agent runtime behavior:
 ```bash
 export TICKTICK_USERNAME="you@email.com"
 export TICKTICK_PASSWORD="secret"
 export TICKTICK_CLIENT_ID="your_id"
 export TICKTICK_CLIENT_SECRET="your_secret"
+export TICKTICK_MIN_REQUEST_INTERVAL="0.25"  # optional request pacing, seconds
 ```
 
 > **Why not MCP?** MCP servers add a separate process, a custom protocol, and [consume thousands of tokens](https://lucumr.pocoo.org/2025/12/13/skills-vs-mcp/) just from tool descriptions being loaded. A CLI that outputs JSON is already a perfect tool interface -- Claude Code calls it via Bash, parses the JSON, and moves on. Zero overhead, universal compatibility, and it works with *any* agent that has shell access.

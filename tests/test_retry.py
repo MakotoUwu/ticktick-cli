@@ -9,6 +9,7 @@ import pytest
 
 from ticktick_cli.api.base import (
     _BACKOFF_BASE,
+    _DEFAULT_MIN_REQUEST_INTERVAL,
     _MAX_RETRIES,
     _RETRYABLE_STATUS,
     BaseClient,
@@ -109,6 +110,54 @@ class TestRetryLogic:
 
         assert result == {"ok": True}
         mock_sleep.assert_called_once_with(5.0)
+
+    @patch("ticktick_cli.api.base.time.sleep")
+    @patch("ticktick_cli.api.base.time.monotonic")
+    def test_throttles_sequential_first_attempts(
+        self,
+        mock_monotonic: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
+        client = BaseClient("https://example.com", min_request_interval=0.5)
+        mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 200
+        mock_resp.content = b'{}'
+        mock_resp.json.return_value = {}
+        mock_monotonic.side_effect = [100.0, 100.1, 100.5]
+
+        with patch.object(client._http, "request", return_value=mock_resp):
+            client._request("GET", "/one")
+            client._request("GET", "/two")
+
+        mock_sleep.assert_called_once_with(pytest.approx(0.4))
+
+    @patch("ticktick_cli.api.base.time.sleep")
+    @patch("ticktick_cli.api.base.time.monotonic")
+    def test_retry_backoff_is_not_double_throttled(
+        self,
+        mock_monotonic: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
+        client = BaseClient("https://example.com", min_request_interval=10.0)
+        bad_resp = MagicMock(spec=httpx.Response)
+        bad_resp.status_code = 429
+        bad_resp.headers = {"Retry-After": "5"}
+        good_resp = MagicMock(spec=httpx.Response)
+        good_resp.status_code = 200
+        good_resp.content = b'{}'
+        good_resp.json.return_value = {}
+        mock_monotonic.side_effect = [100.0, 100.1]
+
+        with patch.object(client._http, "request", side_effect=[bad_resp, good_resp]):
+            client._request("GET", "/test")
+
+        mock_sleep.assert_called_once_with(5.0)
+
+    def test_min_request_interval_can_be_disabled_by_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TICKTICK_MIN_REQUEST_INTERVAL", "0")
+        client = BaseClient("https://example.com")
+
+        assert client._min_request_interval == 0
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_429_without_retry_after_uses_backoff(self, mock_sleep: MagicMock) -> None:
@@ -280,3 +329,6 @@ class TestRetryableConstants:
 
     def test_backoff_base(self) -> None:
         assert _BACKOFF_BASE == 1.0
+
+    def test_default_min_request_interval(self) -> None:
+        assert _DEFAULT_MIN_REQUEST_INTERVAL == 0.25

@@ -221,6 +221,7 @@ Global options can be set via environment variables as defaults:
 | `TICKTICK_PROFILE` | `--profile` | `export TICKTICK_PROFILE=work` |
 | `TICKTICK_FIELDS` | `--fields` | `export TICKTICK_FIELDS=id,title,priority` |
 | `TICKTICK_QUIET` | `--quiet` | `export TICKTICK_QUIET=1` |
+| `TICKTICK_MIN_REQUEST_INTERVAL` | HTTP pacing between sequential API calls, in seconds | `export TICKTICK_MIN_REQUEST_INTERVAL=0.25` |
 
 Command-line flags always take precedence over environment variables.
 

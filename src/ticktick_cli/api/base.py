@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -25,6 +26,18 @@ _RETRYABLE_STATUS = {502, 503, 504}
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 1.0  # seconds: 1s, 2s, 4s
 _RATE_LIMIT_MAX_WAIT = 60.0
+_DEFAULT_MIN_REQUEST_INTERVAL = 0.25
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        logger.warning("Ignoring invalid %s=%r; using %.2fs", name, value, default)
+        return default
 
 
 def _parse_retry_after(value: str | None) -> float | None:
@@ -66,8 +79,20 @@ def _rate_limit_wait(response: httpx.Response, attempt: int) -> float:
 class BaseClient:
     """Shared HTTP transport for both V1 and V2 APIs."""
 
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30.0,
+        min_request_interval: float | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._min_request_interval = max(
+            0.0,
+            _env_float("TICKTICK_MIN_REQUEST_INTERVAL", _DEFAULT_MIN_REQUEST_INTERVAL)
+            if min_request_interval is None
+            else min_request_interval,
+        )
+        self._last_request_at = 0.0
         self._http = httpx.Client(
             base_url=self._base_url,
             timeout=timeout,
@@ -77,6 +102,20 @@ class BaseClient:
     def _get_auth_headers(self) -> dict[str, str]:
         """Override in subclass to provide auth headers."""
         return {}
+
+    def _prepare_request_slot(self, *, wait_if_needed: bool) -> None:
+        """Pace sequential requests before TickTick responds with 429."""
+        if self._min_request_interval <= 0:
+            return
+
+        now = time.monotonic()
+        elapsed = now - self._last_request_at
+        wait = self._min_request_interval - elapsed
+        if wait_if_needed and self._last_request_at and wait > 0:
+            logger.debug("Throttling TickTick request for %.2fs", wait)
+            time.sleep(wait)
+            now = time.monotonic()
+        self._last_request_at = now
 
     def _request(
         self,
@@ -93,6 +132,9 @@ class BaseClient:
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
+                # First attempts are paced across normal command fanout. Retry attempts
+                # already waited through their retry/backoff path.
+                self._prepare_request_slot(wait_if_needed=attempt == 0)
                 response = self._http.request(
                     method,
                     path,
