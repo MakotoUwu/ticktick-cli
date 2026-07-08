@@ -7,15 +7,16 @@ Supports:
   +3d, +1w, +2m (relative offsets: days/weeks/months)
   -2d (past offsets)
   YYYY-MM-DD (ISO date)
-  YYYY-MM-DDTHH:MM:SS (ISO datetime)
+  YYYY-MM-DDTHH:MM:SS (ISO datetime, local time if no offset is supplied)
 """
 
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 _TICKTICK_FMT = "%Y-%m-%dT%H:%M:%S.000+0000"
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 _WEEKDAYS = {
     "monday": 0,
@@ -40,12 +41,15 @@ _RELATIVE_RE = re.compile(r"^([+-]?)(\d+)([dwm])$")
 def parse_date(date_str: str) -> str:
     """Parse a human-friendly date string into TickTick's date format.
 
-    Returns ISO-ish string: ``YYYY-MM-DDT00:00:00.000+0000``
+    Date-only inputs return ``YYYY-MM-DDT00:00:00.000+0000``. Timed inputs
+    are treated as local wall time when no offset is supplied, then converted
+    to TickTick's UTC payload format.
 
     Raises ``ValueError`` if the string cannot be parsed.
     """
     now = datetime.now()
-    token = date_str.strip().lower()
+    raw = date_str.strip()
+    token = raw.lower()
 
     # -- Aliases --------------------------------------------------------
     if token == "today":
@@ -92,8 +96,11 @@ def parse_date(date_str: str) -> str:
 
     # -- ISO date / datetime fallback -----------------------------------
     try:
-        dt = datetime.fromisoformat(date_str.strip())
-        return dt.strftime(_TICKTICK_FMT)
+        normalized = raw[:-1] + "+00:00" if raw.endswith(("Z", "z")) else raw
+        dt = datetime.fromisoformat(normalized)
+        if _ISO_DATE_RE.fullmatch(raw):
+            return _fmt(dt)
+        return _fmt_timed(dt)
     except ValueError:
         pass
 
@@ -107,8 +114,15 @@ def parse_date(date_str: str) -> str:
 
 
 def _fmt(dt: datetime) -> str:
-    """Format datetime to TickTick's expected format (midnight)."""
+    """Format date-only values to TickTick's all-day midnight payload."""
     return dt.replace(hour=0, minute=0, second=0, microsecond=0).strftime(_TICKTICK_FMT)
+
+
+def _fmt_timed(dt: datetime) -> str:
+    """Format timed values as UTC while preserving local wall-clock intent."""
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        dt = dt.astimezone()
+    return dt.astimezone(timezone.utc).strftime(_TICKTICK_FMT)
 
 
 def _next_weekday(now: datetime, target_weekday: int) -> datetime:

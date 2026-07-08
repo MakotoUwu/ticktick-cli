@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import time
+from collections.abc import Iterator
 from datetime import datetime
 from unittest.mock import patch
 
@@ -20,6 +23,23 @@ def _fixed_parse(date_str: str) -> str:
         mock_dt.fromisoformat = datetime.fromisoformat
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
         return parse_date(date_str)
+
+
+@pytest.fixture
+def brussels_tz(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Run local-time assertions against the user's Brussels timezone."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset is required for timezone-sensitive date tests")
+
+    previous = os.environ.get("TZ")
+    monkeypatch.setenv("TZ", "Europe/Brussels")
+    time.tzset()
+    yield
+    if previous is None:
+        monkeypatch.delenv("TZ", raising=False)
+    else:
+        monkeypatch.setenv("TZ", previous)
+    time.tzset()
 
 
 class TestBasicDates:
@@ -116,9 +136,21 @@ class TestISOFallback:
         result = parse_date("2026-06-15")
         assert result == "2026-06-15T00:00:00.000+0000"
 
-    def test_iso_datetime(self) -> None:
+    def test_iso_datetime_without_offset_uses_local_timezone(self, brussels_tz: None) -> None:
         result = parse_date("2026-06-15T10:30:00")
-        assert result == "2026-06-15T10:30:00.000+0000"
+        assert result == "2026-06-15T08:30:00.000+0000"
+
+    def test_iso_datetime_with_offset_converts_to_utc(self) -> None:
+        result = parse_date("2026-06-15T10:30:00+02:00")
+        assert result == "2026-06-15T08:30:00.000+0000"
+
+    def test_space_separated_datetime_uses_brussels_summer_time(self, brussels_tz: None) -> None:
+        result = parse_date("2026-07-08 11:30")
+        assert result == "2026-07-08T09:30:00.000+0000"
+
+    def test_space_separated_datetime_uses_brussels_winter_time(self, brussels_tz: None) -> None:
+        result = parse_date("2026-01-08 11:30")
+        assert result == "2026-01-08T10:30:00.000+0000"
 
 
 class TestErrors:
