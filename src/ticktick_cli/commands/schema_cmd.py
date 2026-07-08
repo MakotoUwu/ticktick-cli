@@ -24,6 +24,7 @@ _NO_AUTH_COMMANDS = {
     "config set",
     "schema",
     "version",
+    "web-cache audit",
 }
 
 _EITHER_API_COMMANDS = {

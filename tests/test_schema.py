@@ -92,3 +92,8 @@ class TestSchemaCommand:
         auth_status = next(c for c in commands if c["command"].endswith("auth status"))
         assert auth_status["agent"]["auth_api"] == "none"
         assert auth_status["agent"]["requires_auth"] is False
+
+        web_cache_audit = next(c for c in commands if c["command"].endswith("web-cache audit"))
+        assert web_cache_audit["agent"]["mutates"] is False
+        assert web_cache_audit["agent"]["auth_api"] == "none"
+        assert web_cache_audit["agent"]["requires_auth"] is False

@@ -30,19 +30,19 @@ class TestHandleResponse:
         return resp
 
     def test_401_raises_auth_error(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         with pytest.raises(AuthenticationError, match="401"):
             client._handle_response(self._make_response(401), "/test")
 
     def test_429_raises_rate_limit(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         with pytest.raises(RateLimitError, match="429") as exc_info:
             client._handle_response(self._make_response(429), "/test")
         assert exc_info.value.status_code == 429
         assert exc_info.value.retry_after_seconds is None
 
     def test_429_preserves_retry_after_header(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         response = self._make_response(429)
         response.headers = {"Retry-After": "42"}
 
@@ -52,28 +52,28 @@ class TestHandleResponse:
         assert exc_info.value.retry_after_seconds == 42
 
     def test_404_raises_not_found(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         with pytest.raises(NotFoundError, match="/test"):
             client._handle_response(self._make_response(404), "/test")
 
     def test_500_raises_api_error(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         with pytest.raises(APIError, match="500"):
             client._handle_response(self._make_response(500, text="Internal Server Error"), "/test")
 
     def test_204_returns_empty_dict(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         result = client._handle_response(self._make_response(204), "/test")
         assert result == {}
 
     def test_200_returns_json(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         resp = self._make_response(200, text='{"key": "value"}', json_data={"key": "value"})
         result = client._handle_response(resp, "/test")
         assert result == {"key": "value"}
 
     def test_error_body_truncated(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         long_body = "x" * 500
         with pytest.raises(APIError) as exc_info:
             client._handle_response(self._make_response(400, text=long_body), "/test")
@@ -84,7 +84,7 @@ class TestRetryLogic:
     """Test retry with exponential backoff."""
 
     def test_success_on_first_attempt(self) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         mock_resp = MagicMock(spec=httpx.Response)
         mock_resp.status_code = 200
         mock_resp.content = b'{"ok": true}'
@@ -95,7 +95,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_429_with_retry_after(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 429
@@ -118,7 +118,11 @@ class TestRetryLogic:
         mock_monotonic: MagicMock,
         mock_sleep: MagicMock,
     ) -> None:
-        client = BaseClient("https://example.com", min_request_interval=0.5)
+        client = BaseClient(
+            "https://example.com",
+            min_request_interval=0.5,
+            shared_throttle=False,
+        )
         mock_resp = MagicMock(spec=httpx.Response)
         mock_resp.status_code = 200
         mock_resp.content = b'{}'
@@ -132,13 +136,42 @@ class TestRetryLogic:
         mock_sleep.assert_called_once_with(pytest.approx(0.4))
 
     @patch("ticktick_cli.api.base.time.sleep")
+    @patch("ticktick_cli.api.base.time.time")
+    def test_throttles_across_client_instances(
+        self,
+        mock_time: MagicMock,
+        mock_sleep: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        monkeypatch.setenv("TICKTICK_THROTTLE_DIR", str(tmp_path))
+        first = BaseClient("https://example.com", min_request_interval=0.5)
+        second = BaseClient("https://example.com", min_request_interval=0.5)
+        mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 200
+        mock_resp.content = b'{}'
+        mock_resp.json.return_value = {}
+        mock_time.side_effect = [100.0, 100.1, 100.5]
+
+        with patch.object(first._http, "request", return_value=mock_resp):
+            first._request("GET", "/one")
+        with patch.object(second._http, "request", return_value=mock_resp):
+            second._request("GET", "/two")
+
+        mock_sleep.assert_called_once_with(pytest.approx(0.4))
+
+    @patch("ticktick_cli.api.base.time.sleep")
     @patch("ticktick_cli.api.base.time.monotonic")
     def test_retry_backoff_is_not_double_throttled(
         self,
         mock_monotonic: MagicMock,
         mock_sleep: MagicMock,
     ) -> None:
-        client = BaseClient("https://example.com", min_request_interval=10.0)
+        client = BaseClient(
+            "https://example.com",
+            min_request_interval=10.0,
+            shared_throttle=False,
+        )
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 429
         bad_resp.headers = {"Retry-After": "5"}
@@ -155,13 +188,13 @@ class TestRetryLogic:
 
     def test_min_request_interval_can_be_disabled_by_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TICKTICK_MIN_REQUEST_INTERVAL", "0")
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         assert client._min_request_interval == 0
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_429_without_retry_after_uses_backoff(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 429
@@ -179,7 +212,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_exhausted_429_preserves_retry_after(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 429
         bad_resp.text = ""
@@ -195,7 +228,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_502(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 502
@@ -212,7 +245,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_503(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 503
@@ -228,7 +261,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_connect_error(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         good_resp = MagicMock(spec=httpx.Response)
         good_resp.status_code = 200
@@ -246,7 +279,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_retries_on_read_timeout(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         good_resp = MagicMock(spec=httpx.Response)
         good_resp.status_code = 200
@@ -263,7 +296,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_exhausts_retries_raises_api_error(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         with patch.object(
             client._http, "request",
@@ -276,7 +309,7 @@ class TestRetryLogic:
 
     @patch("ticktick_cli.api.base.time.sleep")
     def test_exponential_backoff_timing(self, mock_sleep: MagicMock) -> None:
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
 
         with patch.object(
             client._http, "request",
@@ -292,7 +325,7 @@ class TestRetryLogic:
     @patch("ticktick_cli.api.base.time.sleep")
     def test_non_retryable_status_not_retried(self, mock_sleep: MagicMock) -> None:
         """400 errors should NOT be retried."""
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 400
         bad_resp.text = "Bad request"
@@ -307,7 +340,7 @@ class TestRetryLogic:
     @patch("ticktick_cli.api.base.time.sleep")
     def test_last_502_still_handled(self, mock_sleep: MagicMock) -> None:
         """On last attempt, 502 should be passed to _handle_response (which raises APIError)."""
-        client = BaseClient("https://example.com")
+        client = BaseClient("https://example.com", shared_throttle=False)
         bad_resp = MagicMock(spec=httpx.Response)
         bad_resp.status_code = 502
         bad_resp.text = "Bad gateway"
@@ -331,4 +364,4 @@ class TestRetryableConstants:
         assert _BACKOFF_BASE == 1.0
 
     def test_default_min_request_interval(self) -> None:
-        assert _DEFAULT_MIN_REQUEST_INTERVAL == 0.25
+        assert _DEFAULT_MIN_REQUEST_INTERVAL == 0.5

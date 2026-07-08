@@ -170,6 +170,14 @@ ticktick user preferences
 ticktick sync                              # Full account state dump
 ```
 
+### Web Cache Audit
+
+Use this read-only fallback only when a TickTick web-cache snapshot has already been exported from the browser and live API calls are blocked or unnecessary.
+
+```bash
+ticktick web-cache audit --file ticktick-web-cache.json [--today YYYY-MM-DD] [--group "North Star"]
+```
+
 ### Config
 
 ```bash
@@ -221,7 +229,7 @@ Global options can be set via environment variables as defaults:
 | `TICKTICK_PROFILE` | `--profile` | `export TICKTICK_PROFILE=work` |
 | `TICKTICK_FIELDS` | `--fields` | `export TICKTICK_FIELDS=id,title,priority` |
 | `TICKTICK_QUIET` | `--quiet` | `export TICKTICK_QUIET=1` |
-| `TICKTICK_MIN_REQUEST_INTERVAL` | HTTP pacing between sequential API calls, in seconds | `export TICKTICK_MIN_REQUEST_INTERVAL=0.25` |
+| `TICKTICK_MIN_REQUEST_INTERVAL` | HTTP pacing between sequential API calls, in seconds | `export TICKTICK_MIN_REQUEST_INTERVAL=0.5` |
 
 Command-line flags always take precedence over environment variables.
 

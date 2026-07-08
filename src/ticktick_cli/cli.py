@@ -26,6 +26,7 @@ from ticktick_cli.commands.tag_cmd import tag_group
 from ticktick_cli.commands.task_cmd import task_group
 from ticktick_cli.commands.template_cmd import template_group
 from ticktick_cli.commands.user_cmd import user_group
+from ticktick_cli.commands.web_cache_cmd import web_cache_group
 from ticktick_cli.output import output_error, output_item
 
 
@@ -100,6 +101,7 @@ cli.add_command(template_group, "template")
 cli.add_command(user_group, "user")
 cli.add_command(config_group, "config")
 cli.add_command(schema_command, "schema")
+cli.add_command(web_cache_group, "web-cache")
 
 
 # ── Standalone commands ──────────────────────────────────

@@ -225,6 +225,7 @@ ticktick sync
 | **User** | `profile` `status` `stats` `preferences` | V2 |
 | **Config** | `set` `get` `list` `path` | -- |
 | **Auth** | `login` `login-v2` `logout` `status` | -- |
+| **Web cache** | `audit` | local JSON |
 | **Utilities** | `sync` `schema` `completion` `version` | V2 |
 
 ### Global Options
@@ -279,7 +280,12 @@ ticktick project delete PROJECT_ID --yes
 
 **Deterministic exit codes** -- agents can check `$?` to determine success/failure without parsing output.
 
-**Rate-limit aware** -- sequential HTTP calls are paced before TickTick starts returning 429s, and HTTP 429 responses are retried with bounded backoff. If TickTick is still rate-limiting, the CLI exits with code `5` and returns a typed JSON error such as `{"error_type":"RateLimitError","status_code":429}` plus `retry_after_seconds` when the server provides a `Retry-After` header. Tune or disable the proactive pacing with `TICKTICK_MIN_REQUEST_INTERVAL` seconds, for example `TICKTICK_MIN_REQUEST_INTERVAL=0`.
+**Rate-limit aware** -- sequential HTTP calls are paced across CLI processes before TickTick starts returning 429s, and HTTP 429 responses are retried with bounded backoff. If TickTick is still rate-limiting, the CLI exits with code `5` and returns a typed JSON error such as `{"error_type":"RateLimitError","status_code":429}` plus `retry_after_seconds` when the server provides a `Retry-After` header. Tune or disable the proactive pacing with `TICKTICK_MIN_REQUEST_INTERVAL` seconds, for example `TICKTICK_MIN_REQUEST_INTERVAL=0`.
+
+**Read-only web-cache audit** -- when the live API is temporarily rate-limited, agents can analyze an exported TickTick web-cache snapshot without touching the network:
+```bash
+ticktick web-cache audit --file ticktick-web-cache.json --today 2026-07-08 --group "North Star"
+```
 
 **Pipe-friendly** -- combine with `jq` for complex queries:
 ```bash
@@ -302,7 +308,7 @@ export TICKTICK_USERNAME="you@email.com"
 export TICKTICK_PASSWORD="secret"
 export TICKTICK_CLIENT_ID="your_id"
 export TICKTICK_CLIENT_SECRET="your_secret"
-export TICKTICK_MIN_REQUEST_INTERVAL="0.25"  # optional request pacing, seconds
+export TICKTICK_MIN_REQUEST_INTERVAL="0.5"  # optional request pacing, seconds
 ```
 
 > **Why not MCP?** MCP servers add a separate process, a custom protocol, and [consume thousands of tokens](https://lucumr.pocoo.org/2025/12/13/skills-vs-mcp/) just from tool descriptions being loaded. A CLI that outputs JSON is already a perfect tool interface -- Claude Code calls it via Bash, parses the JSON, and moves on. Zero overhead, universal compatibility, and it works with *any* agent that has shell access.

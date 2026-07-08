@@ -7,9 +7,16 @@ import os
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from hashlib import sha256
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None
 
 from ticktick_cli.exceptions import (
     APIError,
@@ -26,7 +33,7 @@ _RETRYABLE_STATUS = {502, 503, 504}
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 1.0  # seconds: 1s, 2s, 4s
 _RATE_LIMIT_MAX_WAIT = 60.0
-_DEFAULT_MIN_REQUEST_INTERVAL = 0.25
+_DEFAULT_MIN_REQUEST_INTERVAL = 0.5
 
 
 def _env_float(name: str, default: float) -> float:
@@ -76,6 +83,30 @@ def _rate_limit_wait(response: httpx.Response, attempt: int) -> float:
     return _BACKOFF_BASE * (2 ** attempt)
 
 
+def _throttle_state_dir() -> Path | None:
+    raw = os.getenv("TICKTICK_THROTTLE_DIR")
+    if raw:
+        path = Path(raw)
+    else:
+        state_home = os.getenv("XDG_STATE_HOME")
+        path = Path(state_home) if state_home else Path.home() / ".local" / "state"
+        path = path / "ticktick-cli"
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.debug("Could not create TickTick throttle directory %s: %s", path, exc)
+        return None
+    return path
+
+
+def _request_slot_path(base_url: str) -> Path | None:
+    directory = _throttle_state_dir()
+    if directory is None:
+        return None
+    key = sha256(base_url.encode("utf-8")).hexdigest()[:16]
+    return directory / f"request-{key}.lock"
+
+
 class BaseClient:
     """Shared HTTP transport for both V1 and V2 APIs."""
 
@@ -84,6 +115,7 @@ class BaseClient:
         base_url: str,
         timeout: float = 30.0,
         min_request_interval: float | None = None,
+        shared_throttle: bool = True,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._min_request_interval = max(
@@ -93,6 +125,7 @@ class BaseClient:
             else min_request_interval,
         )
         self._last_request_at = 0.0
+        self._request_slot_path = _request_slot_path(self._base_url) if shared_throttle else None
         self._http = httpx.Client(
             base_url=self._base_url,
             timeout=timeout,
@@ -107,6 +140,9 @@ class BaseClient:
         """Pace sequential requests before TickTick responds with 429."""
         if self._min_request_interval <= 0:
             return
+        if wait_if_needed and self._request_slot_path is not None:
+            self._prepare_shared_request_slot()
+            return
 
         now = time.monotonic()
         elapsed = now - self._last_request_at
@@ -116,6 +152,35 @@ class BaseClient:
             time.sleep(wait)
             now = time.monotonic()
         self._last_request_at = now
+
+    def _prepare_shared_request_slot(self) -> None:
+        """Pace requests across separate CLI processes."""
+        if fcntl is None or self._request_slot_path is None:
+            self._prepare_request_slot(wait_if_needed=True)
+            return
+
+        with self._request_slot_path.open("a+") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            lock_file.seek(0)
+            raw = lock_file.read().strip()
+            try:
+                last_request_at = float(raw) if raw else 0.0
+            except ValueError:
+                last_request_at = 0.0
+
+            now = time.time()
+            elapsed = now - last_request_at
+            wait = self._min_request_interval - elapsed
+            if last_request_at and wait > 0:
+                logger.debug("Throttling shared TickTick request for %.2fs", wait)
+                time.sleep(wait)
+                now = time.time()
+
+            lock_file.seek(0)
+            lock_file.truncate()
+            lock_file.write(f"{now:.6f}")
+            lock_file.flush()
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _request(
         self,

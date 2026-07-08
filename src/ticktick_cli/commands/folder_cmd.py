@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import click
 
 from ticktick_cli.auth import get_client
+from ticktick_cli.exceptions import TickTickCLIError, handle_cli_error
 from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
@@ -13,6 +16,14 @@ from ticktick_cli.output import (
     output_list,
     output_message,
 )
+
+
+def _handle_folder_error(error: Exception, ctx: click.Context) -> NoReturn:
+    """Preserve typed CLI errors while keeping generic folder errors formatted."""
+    if isinstance(error, TickTickCLIError):
+        handle_cli_error(error)
+    output_error(str(error), ctx)
+    raise SystemExit(1) from None
 
 
 @click.group("folder")
@@ -30,8 +41,7 @@ def folder_list(ctx: click.Context) -> None:
         formatted = [{"id": g.get("id", ""), "name": g.get("name", "")} for g in groups]
         output_list(formatted, columns=["id", "name"], title="Folders", ctx=ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_folder_error(e, ctx)
 
 
 @folder_group.command("create")
@@ -56,8 +66,7 @@ def folder_create(ctx: click.Context, name: str) -> None:
             item.pop("id", None)
         output_item(item, ctx, message=f"Folder '{name}' created.")
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_folder_error(e, ctx)
 
 
 @folder_group.command("rename")
@@ -73,8 +82,7 @@ def folder_rename(ctx: click.Context, folder_id: str, new_name: str) -> None:
         )
         output_message(f"Folder {folder_id} renamed to '{new_name}'.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_folder_error(e, ctx)
 
 
 @folder_group.command("delete")
@@ -94,5 +102,4 @@ def folder_delete(ctx: click.Context, folder_id: str, yes: bool) -> None:
         client.v2.batch_project_groups(delete=[folder_id])
         output_message(f"Folder {folder_id} deleted.", ctx)
     except Exception as e:
-        output_error(str(e), ctx)
-        raise SystemExit(1) from None
+        _handle_folder_error(e, ctx)
