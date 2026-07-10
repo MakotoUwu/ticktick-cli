@@ -57,6 +57,7 @@ _V1_TASK_EDIT_FIELDS = {
     "projectId",
     "columnId",
 }
+_V1_TASK_CREATE_FIELDS = _V1_TASK_EDIT_FIELDS - {"id", "tags", "columnId"}
 
 
 def _handle_task_error(error: Exception, ctx: click.Context) -> NoReturn:
@@ -255,30 +256,47 @@ def task_add(
         return
 
     client = get_client(ctx.obj.get("profile", "default"))
+    project_id = _resolve_project_id(client, project) if project else None
 
     if if_not_exists:
         try:
             tasks = client.get_all_tasks()
-            project_id = _resolve_project_id(client, project) if project else None
-            for t in tasks:
-                if (
-                    t.get("title", "").lower() == title.lower()
-                    and t.get("status", 0) < 2
-                    and (project_id is None or t.get("projectId") == project_id)
-                ):
-                    output_existing_item(_format_task(t), ctx)
-                    return
         except Exception as e:
-            _handle_task_error(e, ctx)
+            if not (client.has_v1 and _is_rate_limit_error(e)):
+                _handle_task_error(e, ctx)
+            project_ids = {project_id} if project_id else None
+            tasks = _get_project_tasks_v1(client, project_ids)
+        for t in tasks:
+            if (
+                t.get("title", "").lower() == title.lower()
+                and t.get("status", 0) < 2
+                and (project_id is None or t.get("projectId") == project_id)
+            ):
+                output_existing_item(_format_task(t), ctx)
+                return
 
     if project:
-        task_data["projectId"] = _resolve_project_id(client, project)
+        task_data["projectId"] = project_id
         task_data.pop("project", None)
 
     try:
         if client.has_v2:
             task_data.setdefault("id", _generate_object_id())
-            client.v2.batch_tasks(add=[task_data])
+            try:
+                client.v2.batch_tasks(add=[task_data])
+            except Exception as v2_error:
+                if not (client.has_v1 and _is_rate_limit_error(v2_error)):
+                    raise
+                v1_task_data = {
+                    key: value for key, value in task_data.items() if key in _V1_TASK_CREATE_FIELDS
+                }
+                result = client.v1.create_task(v1_task_data)
+                output_item(
+                    _format_task(result),
+                    ctx,
+                    message=f"Task created: {result.get('title', title)}",
+                )
+                return
             output_item(_format_task(task_data), ctx, message=f"Task created: {title}")
         else:
             result = client.v1.create_task(task_data)

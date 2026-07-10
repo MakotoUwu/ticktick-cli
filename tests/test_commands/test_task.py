@@ -265,6 +265,54 @@ class TestTaskAdd:
         data = json.loads(result.output)
         assert data["dry_run"] is True
 
+    def test_add_falls_back_to_v1_when_v2_create_is_rate_limited(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.v2.batch_tasks.side_effect = RateLimitError("API rate limit exceeded (429).")
+        mock_client.v1.create_task.return_value = {
+            "id": "created-v1",
+            "title": "Fallback task",
+            "projectId": "proj1",
+            "priority": 0,
+        }
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(
+                cli,
+                ["task", "add", "Fallback task", "--project", "proj1"],
+            )
+
+        assert result.exit_code == 0
+        mock_client.v1.create_task.assert_called_once_with(
+            {"title": "Fallback task", "priority": 0, "projectId": "proj1"}
+        )
+
+    def test_add_duplicate_check_falls_back_to_v1_when_v2_is_rate_limited(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.get_all_tasks.side_effect = RateLimitError("API rate limit exceeded (429).")
+        mock_client.v1.get_project_with_data.return_value = {
+            "project": {"id": "proj1", "name": "Inbox"},
+            "tasks": [{"id": "task1", "title": "Existing task", "status": 0}],
+        }
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(
+                cli,
+                [
+                    "task",
+                    "add",
+                    "Existing task",
+                    "--project",
+                    "proj1",
+                    "--if-not-exists",
+                ],
+            )
+
+        assert result.exit_code == 0
+        mock_client.v2.batch_tasks.assert_not_called()
+        mock_client.v1.create_task.assert_not_called()
+
 
 class TestTaskDone:
     def test_done_v1(self, runner: CliRunner, mock_client: MagicMock) -> None:
