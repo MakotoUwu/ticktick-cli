@@ -492,7 +492,7 @@ def task_abandon(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
     try:
         updates = []
         for tid in task_ids:
-            task = client.v2.get_task(tid)
+            task = _get_task_any(client, tid)
             updates.append({"id": tid, "projectId": task["projectId"], "status": -1})
         client.v2.batch_tasks(update=updates)
         output_message(f"Abandoned {len(task_ids)} task(s).", ctx)
@@ -1138,17 +1138,18 @@ def _sort_tasks(tasks: list[dict], sort_key: str) -> list[dict]:
 def _get_task_any(client: Any, task_id: str) -> dict:
     """Get task from either V2 or V1."""
     if client.has_v2:
-        return client.v2.get_task(task_id)
+        try:
+            return client.v2.get_task(task_id)
+        except Exception as v2_error:
+            if not (client.has_v1 and _is_rate_limit_error(v2_error)):
+                raise
     return _find_task_v1(client, task_id)
 
 
 def _find_task_v1(client: Any, task_id: str) -> dict:
-    """Find task via V1 (requires searching across projects)."""
-    projects = client.v1.list_projects()
-    for proj in projects:
-        try:
-            return client.v1.get_task(proj["id"], task_id)
-        except Exception:
-            continue
+    """Find a task and its project through V1 project data."""
+    for task in _get_project_tasks_v1(client):
+        if task.get("id") == task_id:
+            return task
     from ticktick_cli.exceptions import NotFoundError
     raise NotFoundError(f"Task {task_id} not found in any project.")

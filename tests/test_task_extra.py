@@ -191,7 +191,10 @@ class TestTaskEdit:
         mock_get.return_value = client
         client.v2.get_task.side_effect = Exception("API rate limit exceeded (429)")
         client.v1.list_projects.return_value = [{"id": "proj1", "name": "Founder Focus"}]
-        client.v1.get_task.return_value = {"id": "t1", "projectId": "proj1"}
+        client.v1.get_project_with_data.return_value = {
+            "project": {"id": "proj1", "name": "Founder Focus"},
+            "tasks": [{"id": "t1", "projectId": "proj1"}],
+        }
 
         runner = CliRunner()
         result = runner.invoke(

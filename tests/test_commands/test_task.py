@@ -274,6 +274,40 @@ class TestTaskDone:
         data = json.loads(result.output)
         assert "Completed 1 task(s)" in data["message"]
 
+    def test_done_falls_back_to_v1_when_v2_lookup_is_rate_limited(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.v2.get_task.side_effect = RateLimitError("API rate limit exceeded (429).")
+        mock_client.v1.get_project_with_data.side_effect = [
+            {"project": {"id": "proj1", "name": "Inbox"}, "tasks": []},
+            {"project": {"id": "proj2", "name": "Work"}, "tasks": [{"id": "task1"}]},
+        ]
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "done", "task1"])
+
+        assert result.exit_code == 0
+        mock_client.v1.complete_task.assert_called_once_with("proj2", "task1")
+
+
+class TestTaskAbandon:
+    def test_abandon_falls_back_to_v1_when_v2_lookup_is_rate_limited(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        mock_client.v2.get_task.side_effect = RateLimitError("API rate limit exceeded (429).")
+        mock_client.v1.get_project_with_data.side_effect = [
+            {"project": {"id": "proj1", "name": "Inbox"}, "tasks": []},
+            {"project": {"id": "proj2", "name": "Work"}, "tasks": [{"id": "task1"}]},
+        ]
+
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(cli, ["task", "abandon", "task1"])
+
+        assert result.exit_code == 0
+        mock_client.v2.batch_tasks.assert_called_once_with(
+            update=[{"id": "task1", "projectId": "proj2", "status": -1}]
+        )
+
 
 class TestTaskSkip:
     def test_skip_recurring_occurrence(self, runner: CliRunner, mock_client: MagicMock) -> None:

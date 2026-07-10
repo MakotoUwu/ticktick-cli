@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Task dry-runs now avoid write-oriented client setup for `abandon`, `move`, `pin`, `unpin`, and `batch-add`
 - `python -m ticktick_cli` and the installed `ticktick` entrypoint now use the same JSON-safe error handling path
 - TickTick HTTP 429 responses now retry with bounded backoff and preserve typed `RateLimitError` metadata for task commands
+- `task done` and `task abandon` now resolve V1 project membership correctly when V2 reads are rate-limited
 - Sequential TickTick HTTP calls are now paced across CLI processes by default to reduce avoidable API 429s during folder/project fanout
 - The publish workflow now reads the dynamic package version from `src/ticktick_cli/__init__.py`
 
