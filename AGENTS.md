@@ -28,8 +28,8 @@ ticktick task today
 ticktick task overdue
 ticktick task search "QUERY"
 ticktick task show TASK_ID
-ticktick task add "TITLE" [--priority high|medium|low] [--project PROJECT_ID] [--due DATE] [--tag TAG]
-ticktick task edit TASK_ID [--title "NEW"] [--priority LEVEL]
+ticktick task add "TITLE" [--priority high|medium|low] [--project PROJECT_ID] [--due DATE] [--tag TAG] [--all-day|--timed] [--timezone IANA_ZONE]
+ticktick task edit TASK_ID [--title "NEW"] [--priority LEVEL] [--due DATE] [--start DATE] [--all-day|--timed] [--timezone IANA_ZONE]
 ticktick task done TASK_ID [TASK_ID...]
 ticktick task abandon TASK_ID [TASK_ID...]
 ticktick task delete TASK_ID --yes

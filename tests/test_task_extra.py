@@ -210,6 +210,49 @@ class TestTaskEdit:
         )
 
     @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_edit_all_day_rate_limit_falls_back_to_v1(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        client.has_v1 = True
+        client.v1 = MagicMock()
+        mock_get.return_value = client
+        client.v2.get_task.side_effect = Exception("API rate limit exceeded (429)")
+        client.v1.list_projects.return_value = [{"id": "proj1", "name": "Founder Focus"}]
+        client.v1.get_project_with_data.return_value = {
+            "project": {"id": "proj1", "name": "Founder Focus"},
+            "tasks": [{"id": "t1", "projectId": "proj1"}],
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(
+            task_group,
+            [
+                "edit",
+                "t1",
+                "--start",
+                "2026-07-13",
+                "--due",
+                "2026-07-13",
+                "--all-day",
+                "--timezone",
+                "Europe/Brussels",
+            ],
+            obj=_make_ctx(),
+        )
+
+        assert result.exit_code == 0
+        client.v1.update_task.assert_called_once_with(
+            "t1",
+            {
+                "id": "t1",
+                "startDate": "2026-07-13T00:00:00.000+0000",
+                "dueDate": "2026-07-13T00:00:00.000+0000",
+                "isAllDay": True,
+                "timeZone": "Europe/Brussels",
+                "projectId": "proj1",
+            },
+        )
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
     def test_edit_fetches_project_id(self, mock_get: MagicMock) -> None:
         """When no --project is given, edit should fetch the task to get projectId."""
         client = _mock_client()

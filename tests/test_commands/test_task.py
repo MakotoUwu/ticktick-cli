@@ -279,12 +279,27 @@ class TestTaskAdd:
         with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
             result = runner.invoke(
                 cli,
-                ["task", "add", "Fallback task", "--project", "proj1"],
+                [
+                    "task",
+                    "add",
+                    "Fallback task",
+                    "--project",
+                    "proj1",
+                    "--all-day",
+                    "--timezone",
+                    "Europe/Brussels",
+                ],
             )
 
         assert result.exit_code == 0
         mock_client.v1.create_task.assert_called_once_with(
-            {"title": "Fallback task", "priority": 0, "projectId": "proj1"}
+            {
+                "title": "Fallback task",
+                "priority": 0,
+                "projectId": "proj1",
+                "isAllDay": True,
+                "timeZone": "Europe/Brussels",
+            }
         )
 
     def test_add_duplicate_check_falls_back_to_v1_when_v2_is_rate_limited(

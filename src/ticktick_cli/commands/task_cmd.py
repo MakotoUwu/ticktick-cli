@@ -53,6 +53,8 @@ _V1_TASK_EDIT_FIELDS = {
     "priority",
     "dueDate",
     "startDate",
+    "timeZone",
+    "isAllDay",
     "tags",
     "projectId",
     "columnId",
@@ -212,7 +214,12 @@ def task_group() -> None:
 @click.option("--due", "-d", default=None, help="Due date (YYYY-MM-DD, today, tomorrow, monday, +3d, +1w, +2m)")
 @click.option("--start", default=None, help="Start date")
 @click.option("--tag", "-t", multiple=True, help="Tags (repeatable)")
-@click.option("--all-day", is_flag=True, help="Mark as all-day task")
+@click.option(
+    "--all-day/--timed",
+    default=None,
+    help="Set whether the task is all-day or timed",
+)
+@click.option("--timezone", default=None, help="IANA timezone, for example Europe/Brussels")
 @click.option("--repeat", default=None, help="Recurrence RRULE (e.g., RRULE:FREQ=DAILY)")
 @click.option("--reminder", multiple=True, help="Reminder triggers")
 @click.option("--if-not-exists", "if_not_exists", is_flag=True, help="Skip creation if a task with the same title exists in the project")
@@ -226,7 +233,8 @@ def task_add(
     due: str | None,
     start: str | None,
     tag: tuple[str, ...],
-    all_day: bool,
+    all_day: bool | None,
+    timezone: str | None,
     repeat: str | None,
     reminder: tuple[str, ...],
     if_not_exists: bool,
@@ -244,8 +252,10 @@ def task_add(
         task_data["startDate"] = parse_date(start)
     if tag:
         task_data["tags"] = list(tag)
-    if all_day:
-        task_data["isAllDay"] = True
+    if all_day is not None:
+        task_data["isAllDay"] = all_day
+    if timezone:
+        task_data["timeZone"] = timezone
     if repeat:
         task_data["repeatFlag"] = repeat
     if reminder:
@@ -419,6 +429,12 @@ def task_show(ctx: click.Context, task_id: str) -> None:
 @click.option("--tag", "-t", multiple=True)
 @click.option("--repeat", default=None)
 @click.option("--column", default=None, help="Kanban column ID")
+@click.option(
+    "--all-day/--timed",
+    default=None,
+    help="Set whether the task is all-day or timed",
+)
+@click.option("--timezone", default=None, help="IANA timezone, for example Europe/Brussels")
 @click.pass_context
 def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
     """Edit a task's properties."""
@@ -439,6 +455,10 @@ def task_edit(ctx: click.Context, task_id: str, **kwargs: Any) -> None:
         update["repeatFlag"] = kwargs["repeat"]
     if kwargs.get("column"):
         update["columnId"] = kwargs["column"]
+    if kwargs.get("all_day") is not None:
+        update["isAllDay"] = kwargs["all_day"]
+    if kwargs.get("timezone"):
+        update["timeZone"] = kwargs["timezone"]
 
     if is_dry_run(ctx):
         output_dry_run("task.edit", update, ctx)

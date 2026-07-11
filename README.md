@@ -132,6 +132,10 @@ ticktick --human task list
 # Add a task (natural language dates!)
 ticktick task add "Review pull request" --priority high --due tomorrow
 
+# Keep calendar dates stable when creating or repairing all-day tasks
+ticktick task add "Weekly review" --due monday --all-day --timezone Europe/Brussels
+ticktick task edit TASK_ID --due monday --start monday --all-day --timezone Europe/Brussels
+
 # Complete it
 ticktick task done TASK_ID
 
