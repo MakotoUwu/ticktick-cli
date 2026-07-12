@@ -10,7 +10,7 @@ from typing import Any
 
 from ticktick_cli.api.v1 import V1Client
 from ticktick_cli.api.v2 import V2Client
-from ticktick_cli.exceptions import AuthenticationError
+from ticktick_cli.exceptions import AuthenticationError, NotFoundError
 
 
 class TickTickClient:
@@ -73,6 +73,26 @@ class TickTickClient:
         """Get all uncompleted tasks — V2 only (V1 requires per-project)."""
         state = self.v2.sync()
         return state.get("syncTaskBean", {}).get("update", [])
+
+    def get_folder_tasks(self, folder_id: str) -> list[dict[str, Any]]:
+        """Return active tasks for every project in a TickTick folder/group."""
+
+        project_ids = [
+            project["id"]
+            for project in self.list_projects()
+            if project.get("groupId") == folder_id
+            and project.get("id")
+            and not project.get("closed")
+        ]
+        if not project_ids:
+            raise NotFoundError(f"No active projects found in folder/group {folder_id}.")
+        if self.has_v1:
+            return self.v1.filter_tasks(project_ids=project_ids, statuses=[0])
+        return [
+            task
+            for task in self.get_all_tasks()
+            if task.get("projectId") in set(project_ids) and task.get("status", 0) == 0
+        ]
 
     def get_all_tags(self) -> list[dict[str, Any]]:
         """Get all tags from sync state."""

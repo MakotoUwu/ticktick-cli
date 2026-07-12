@@ -148,6 +148,9 @@ ticktick --human habit list
 # Inspect a task's native estimate without starting anything
 ticktick focus recommend TASK_ID
 
+# Inspect the timed North Star task whose focus window is active now
+ticktick focus due --folder-id FOLDER_ID
+
 # Start a linked focus block using that estimate, with a 25-minute fallback
 ticktick focus start --task TASK_ID --auto-duration
 

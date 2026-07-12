@@ -56,6 +56,23 @@ The command output always reports `focusMinutes`, `durationSource`,
 `estimatedDurationMinutes`, and `estimatedPomo`, so callers can distinguish
 native estimates from fallbacks.
 
+## Timed Task Scheduling
+
+The official `POST /open/v1/task/filter` endpoint accepts multiple project IDs
+and returns task timing fields including `startDate`, `dueDate`, `isAllDay`, and
+`timeZone`. `ticktick focus due --folder-id FOLDER_ID` uses that official path
+to identify the positive-length timed task whose window is active now.
+
+- All-day, completed, untimed, and zero-length tasks are ignored.
+- The task's start/end interval is the planned focus length.
+- A late check uses only the remaining interval.
+- Fewer than five remaining minutes is too late to start automatically.
+- A single timer is capped at 180 minutes.
+- When timed tasks overlap, the most recently started task wins.
+
+This selection command is read-only. The Mission Control runtime owns the
+separate opt-in decision to start the returned task.
+
 ## Maintenance Rule
 
 Use Chrome DevTools only to discover or verify a missing contract. Once the

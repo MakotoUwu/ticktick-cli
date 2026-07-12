@@ -61,3 +61,30 @@ class V1Client(BaseClient):
 
     def delete_task(self, project_id: str, task_id: str) -> Any:
         return self.delete(f"/project/{project_id}/task/{task_id}")
+
+    def filter_tasks(
+        self,
+        *,
+        project_ids: list[str] | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        priorities: list[int] | None = None,
+        tags: list[str] | None = None,
+        statuses: list[int] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Filter tasks through TickTick's official multi-project endpoint."""
+
+        payload: dict[str, Any] = {}
+        if project_ids is not None:
+            payload["projectIds"] = project_ids
+        if start_date is not None:
+            payload["startDate"] = start_date
+        if end_date is not None:
+            payload["endDate"] = end_date
+        if priorities is not None:
+            payload["priority"] = priorities
+        if tags is not None:
+            payload["tag"] = tags
+        if statuses is not None:
+            payload["status"] = statuses
+        return self.post("/task/filter", json_data=payload)

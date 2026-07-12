@@ -10,6 +10,7 @@ import click
 from ticktick_cli.api.v2 import _generate_object_id
 from ticktick_cli.auth import get_client
 from ticktick_cli.exceptions import RateLimitError
+from ticktick_cli.focus_schedule import parse_task_datetime, select_scheduled_focus
 from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
@@ -400,6 +401,54 @@ def focus_recommend(ctx: click.Context, task_id: str, fallback_minutes: int) -> 
     except click.ClickException as exc:
         output_error(str(exc), ctx)
         raise SystemExit(1) from None
+    except Exception as exc:
+        output_error(str(exc), ctx)
+        raise SystemExit(1) from None
+
+
+@focus_group.command("due")
+@click.option("--folder-id", required=True, help="TickTick folder/group ID to inspect.")
+@click.option(
+    "--at", "at_time", default="", help="Optional ISO timestamp for deterministic checks."
+)
+@click.pass_context
+def focus_due(ctx: click.Context, folder_id: str, at_time: str) -> None:
+    """Show the timed task whose focus window is active now."""
+
+    check_time = datetime.now(timezone.utc)
+    if at_time:
+        parsed = parse_task_datetime(at_time)
+        if not parsed:
+            output_error("--at must be a valid ISO timestamp.", ctx)
+            raise SystemExit(1)
+        check_time = parsed
+
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        plan = select_scheduled_focus(
+            client.get_folder_tasks(folder_id),
+            now=check_time,
+        )
+        if not plan:
+            output_item(
+                {
+                    "status": "idle",
+                    "folderId": folder_id,
+                    "checkedAt": check_time.isoformat(),
+                    "message": "No positive-length timed task is active.",
+                },
+                ctx,
+            )
+            return
+        output_item(
+            {
+                "status": "due",
+                "folderId": folder_id,
+                "checkedAt": check_time.isoformat(),
+                **plan,
+            },
+            ctx,
+        )
     except Exception as exc:
         output_error(str(exc), ctx)
         raise SystemExit(1) from None
