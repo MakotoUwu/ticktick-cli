@@ -135,6 +135,64 @@ def run_focus_control(client: Any, action: str, *, duration: int | None = None) 
     return _run_focus_control(client, action, duration=duration)
 
 
+def run_focus_start(
+    client: Any,
+    *,
+    duration: int = 25,
+    note: str = "",
+    task_id: str = "",
+) -> dict[str, Any]:
+    """Start a live TickTick focus timer, optionally linked to a task.
+
+    Local operator surfaces use this helper so task-linked focus starts share
+    the same validation and payload shape as the CLI command.
+    """
+
+    if duration <= 0:
+        raise click.ClickException("Focus duration must be greater than zero.")
+
+    last_point, current = _current_focus(client)
+    if (
+        current
+        and not current.get("exited", True)
+        and current.get("status", 3) in (0, 1, 2)
+    ):
+        raise click.ClickException(
+            "A focus session or rest break is already active. Finish or abandon it first."
+        )
+
+    session_id = _generate_object_id()
+    now = _utcnow()
+    start_op = {
+        "id": _generate_object_id(),
+        "oId": session_id,
+        "oType": 0,
+        "op": "start",
+        "duration": duration,
+        "firstFocusId": session_id,
+        "focusOnId": task_id,
+        "autoPomoLeft": 5,
+        "pomoCount": 1,
+        "manual": True,
+        "note": note,
+        "time": _fmt_utc(now),
+    }
+
+    result = client.v2.focus_op(last_point=last_point, operations=[start_op])
+    started = result.get("current", {})
+    return {
+        "action": "started",
+        "sessionId": started.get("id", session_id),
+        "duration": duration,
+        "startTime": started.get("startTime", _fmt_utc(now)),
+        "endTime": started.get("endTime", ""),
+        "taskId": task_id or None,
+        "note": note,
+        "operation": start_op["op"],
+        "ticktickPoint": result.get("point"),
+    }
+
+
 def _resolve_date_range(
     from_date: str | None, to_date: str | None, days: int
 ) -> tuple[date, date]:
@@ -172,55 +230,12 @@ def focus_start(ctx: click.Context, duration: int, note: str, task: str) -> None
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
-        # 1. Get current focus state to obtain lastPoint
-        state = client.v2.focus_op(last_point=0, operations=[])
-        last_point = state.get("point", 0)
-
-        # Check if there's already an active session
-        current = state.get("current", {})
-        if current and not current.get("exited", True) and current.get("status", 3) == 0:
-            output_error("A focus session is already running. Use `focus stop` first.", ctx)
-            raise SystemExit(1)
-
-        # 2. Generate IDs
-        session_id = _generate_object_id()
-        op_id = _generate_object_id()
-        now = _utcnow()
-
-        # 3. Build start operation
-        start_op = {
-            "id": op_id,
-            "oId": session_id,
-            "oType": 0,
-            "op": "start",
-            "duration": duration,
-            "firstFocusId": session_id,
-            "focusOnId": task,
-            "autoPomoLeft": 5,
-            "pomoCount": 1,
-            "manual": True,
-            "note": note,
-            "time": _fmt_utc(now),
-        }
-
-        result = client.v2.focus_op(last_point=last_point, operations=[start_op])
-        current = result.get("current", {})
-        output_item(
-            {
-                "action": "started",
-                "sessionId": current.get("id", session_id),
-                "duration": duration,
-                "startTime": current.get("startTime", _fmt_utc(now)),
-                "endTime": current.get("endTime", ""),
-                "taskId": task or None,
-                "note": note,
-            },
-            ctx,
-        )
-    except SystemExit:
-        raise
-    except Exception as e:
-        output_error(str(e), ctx)
+        output_item(run_focus_start(client, duration=duration, note=note, task_id=task), ctx)
+    except click.ClickException as exc:
+        output_error(str(exc), ctx)
+        raise SystemExit(1) from None
+    except Exception as exc:
+        output_error(str(exc), ctx)
         raise SystemExit(1) from None
 
 

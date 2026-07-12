@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -14,6 +15,7 @@ from ticktick_cli.commands.focus_cmd import (
     _fmt_utc,
     _parse_time,
     focus_group,
+    run_focus_start,
 )
 from ticktick_cli.models.pomodoro import (
     FocusOperation,
@@ -263,6 +265,18 @@ class TestFocusStart:
 
         start_call = client.v2.focus_op.call_args_list[1]
         assert start_call.kwargs["operations"][0]["focusOnId"] == "task123"
+
+    def test_reusable_start_rejects_paused_session(self) -> None:
+        client = _mock_client()
+        client.v2.focus_op.return_value = {
+            "point": 100,
+            "current": {"id": "sess1", "exited": False, "status": 1},
+        }
+
+        with pytest.raises(click.ClickException, match="already active"):
+            run_focus_start(client, task_id="task123")
+
+        assert client.v2.focus_op.call_count == 1
 
 
 class TestFocusStop:
