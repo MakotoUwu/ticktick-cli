@@ -145,7 +145,13 @@ ticktick task overdue
 # Check your habits
 ticktick --human habit list
 
-# Start a 25-minute focus session
+# Inspect a task's native estimate without starting anything
+ticktick focus recommend TASK_ID
+
+# Start a linked focus block using that estimate, with a 25-minute fallback
+ticktick focus start --task TASK_ID --auto-duration
+
+# Or start an explicit manual-duration session
 ticktick focus start --duration 25
 ticktick focus pause
 ticktick focus resume

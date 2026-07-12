@@ -15,8 +15,10 @@ from ticktick_cli.commands.focus_cmd import (
     _fmt_utc,
     _parse_time,
     focus_group,
+    resolve_focus_duration,
     run_focus_start,
 )
+from ticktick_cli.exceptions import RateLimitError
 from ticktick_cli.models.pomodoro import (
     FocusOperation,
     Pomodoro,
@@ -147,6 +149,48 @@ class TestParseTime:
             _parse_time("not-a-time")
 
 
+class TestResolveFocusDuration:
+    @pytest.mark.parametrize(
+        ("seconds", "expected"),
+        [(600, 10), (1_800, 25), (5_400, 50)],
+    )
+    def test_uses_native_estimated_duration(self, seconds: int, expected: int) -> None:
+        result = resolve_focus_duration(
+            {"focusSummaries": [{"estimatedDuration": seconds, "estimatedPomo": 0}]}
+        )
+
+        assert result["focusMinutes"] == expected
+        assert result["durationSource"] == "estimated_duration"
+
+    def test_uses_first_pomodoro_from_native_pomo_estimate(self) -> None:
+        result = resolve_focus_duration(
+            {"focusSummaries": [{"estimatedDuration": 0, "estimatedPomo": 3}]}
+        )
+
+        assert result["focusMinutes"] == 25
+        assert result["estimatedPomo"] == 3
+        assert result["durationSource"] == "estimated_pomo"
+
+    def test_falls_back_when_task_has_no_estimate(self) -> None:
+        result = resolve_focus_duration({}, default_minutes=30)
+
+        assert result["focusMinutes"] == 30
+        assert result["durationSource"] == "default"
+
+    def test_does_not_guess_between_multiple_user_estimates(self) -> None:
+        result = resolve_focus_duration(
+            {
+                "focusSummaries": [
+                    {"userId": 1, "estimatedPomo": 1},
+                    {"userId": 2, "estimatedPomo": 2},
+                ]
+            }
+        )
+
+        assert result["focusMinutes"] == 25
+        assert result["durationSource"] == "default_ambiguous"
+
+
 # ── CLI command tests (mocked API) ───────────────────────────
 
 
@@ -220,6 +264,18 @@ class TestFocusStart:
         data = json.loads(result.output)
         assert data["dry_run"] is True
 
+    def test_auto_duration_dry_run(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            focus_group,
+            ["start", "--task", "task123", "--auto-duration"],
+            obj=_make_ctx(dry_run=True),
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["details"]["auto_duration"] is True
+
     @patch("ticktick_cli.commands.focus_cmd.get_client")
     def test_start_custom_duration(self, mock_get: MagicMock) -> None:
         client = _mock_client()
@@ -255,9 +311,7 @@ class TestFocusStart:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(
-            focus_group, ["start", "--task", "task123"], obj=_make_ctx()
-        )
+        result = runner.invoke(focus_group, ["start", "--task", "task123"], obj=_make_ctx())
         assert result.exit_code == 0
 
         data = json.loads(result.output)
@@ -277,6 +331,65 @@ class TestFocusStart:
             run_focus_start(client, task_id="task123")
 
         assert client.v2.focus_op.call_count == 1
+
+    def test_reusable_start_uses_native_task_duration(self) -> None:
+        client = _mock_client()
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"exited": True}},
+            {"point": 200, "current": {"id": "s1", "duration": 50}},
+        ]
+        client.v2.get_task.return_value = {
+            "focusSummaries": [{"estimatedDuration": 5_400, "estimatedPomo": 0}]
+        }
+
+        result = run_focus_start(client, task_id="task123", auto_duration=True)
+
+        assert result["duration"] == 50
+        assert result["durationSource"] == "estimated_duration"
+        operation = client.v2.focus_op.call_args_list[1].kwargs["operations"][0]
+        assert operation["duration"] == 50
+
+    def test_reusable_start_falls_back_when_estimate_read_is_rate_limited(self) -> None:
+        client = _mock_client()
+        client.v2.focus_op.side_effect = [
+            {"point": 100, "current": {"exited": True}},
+            {"point": 200, "current": {"id": "s1", "duration": 25}},
+        ]
+        client.v2.get_task.side_effect = RateLimitError(
+            "Too many requests",
+            status_code=429,
+        )
+
+        result = run_focus_start(client, task_id="task123", auto_duration=True)
+
+        assert result["duration"] == 25
+        assert result["durationSource"] == "default_rate_limited"
+
+
+class TestFocusRecommend:
+    @patch("ticktick_cli.commands.focus_cmd.get_client")
+    def test_recommend_returns_read_only_duration_plan(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        client.v2.get_task.return_value = {
+            "id": "task123",
+            "title": "Deep work",
+            "focusSummaries": [{"estimatedDuration": 1_800, "estimatedPomo": 0}],
+        }
+        mock_get.return_value = client
+
+        runner = CliRunner()
+        result = runner.invoke(
+            focus_group,
+            ["recommend", "task123"],
+            obj=_make_ctx(),
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"]["taskId"] == "task123"
+        assert data["data"]["focusMinutes"] == 25
+        assert data["data"]["durationSource"] == "estimated_duration"
+        client.v2.focus_op.assert_not_called()
 
 
 class TestFocusStop:
@@ -554,9 +667,7 @@ class TestFocusLink:
 
     def test_link_dry_run(self) -> None:
         runner = CliRunner()
-        result = runner.invoke(
-            focus_group, ["link", "task123"], obj=_make_ctx(dry_run=True)
-        )
+        result = runner.invoke(focus_group, ["link", "task123"], obj=_make_ctx(dry_run=True))
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["dry_run"] is True
@@ -615,17 +726,13 @@ class TestFocusDelete:
         client.v2.delete_pomodoro.return_value = {}
 
         runner = CliRunner()
-        result = runner.invoke(
-            focus_group, ["delete", "abc123", "--yes"], obj=_make_ctx()
-        )
+        result = runner.invoke(focus_group, ["delete", "abc123", "--yes"], obj=_make_ctx())
         assert result.exit_code == 0
         client.v2.delete_pomodoro.assert_called_once_with("abc123")
 
     def test_delete_dry_run(self) -> None:
         runner = CliRunner()
-        result = runner.invoke(
-            focus_group, ["delete", "abc123"], obj=_make_ctx(dry_run=True)
-        )
+        result = runner.invoke(focus_group, ["delete", "abc123"], obj=_make_ctx(dry_run=True))
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["dry_run"] is True
@@ -633,9 +740,7 @@ class TestFocusDelete:
     @patch("ticktick_cli.commands.focus_cmd.get_client")
     def test_delete_aborts_without_yes(self, mock_get: MagicMock) -> None:
         runner = CliRunner()
-        result = runner.invoke(
-            focus_group, ["delete", "abc123"], obj=_make_ctx(), input="n\n"
-        )
+        result = runner.invoke(focus_group, ["delete", "abc123"], obj=_make_ctx(), input="n\n")
         assert result.exit_code != 0
         mock_get.assert_not_called()
 

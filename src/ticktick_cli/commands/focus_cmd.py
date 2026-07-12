@@ -9,6 +9,7 @@ import click
 
 from ticktick_cli.api.v2 import _generate_object_id
 from ticktick_cli.auth import get_client
+from ticktick_cli.exceptions import RateLimitError
 from ticktick_cli.output import (
     is_dry_run,
     output_dry_run,
@@ -20,6 +21,7 @@ from ticktick_cli.output import (
 
 # TickTick UTC time format used by pomodoro APIs
 _UTC_FMT = "%Y-%m-%dT%H:%M:%S.000+0000"
+DEFAULT_FOCUS_MINUTES = 25
 
 
 def _utcnow() -> datetime:
@@ -78,6 +80,79 @@ def _focus_operation(
 def _current_focus(client: Any) -> tuple[int, dict[str, Any]]:
     state = client.v2.focus_op(last_point=0, operations=[])
     return state.get("point", 0), state.get("current", {})
+
+
+def _nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def resolve_focus_duration(
+    task: dict[str, Any],
+    *,
+    default_minutes: int = DEFAULT_FOCUS_MINUTES,
+) -> dict[str, Any]:
+    """Resolve one bounded focus block from TickTick's native estimate fields."""
+
+    if default_minutes <= 0:
+        raise click.ClickException("Fallback focus duration must be greater than zero.")
+
+    estimated_seconds = _nonnegative_int(task.get("estimatedDurationSeconds"))
+    estimated_pomo = _nonnegative_int(task.get("estimatedPomo"))
+    ambiguous = bool(task.get("focusEstimateAmbiguous"))
+
+    if not estimated_seconds and not estimated_pomo:
+        estimates = [
+            summary
+            for summary in (task.get("focusSummaries") or [])
+            if _nonnegative_int(summary.get("estimatedDuration")) > 0
+            or _nonnegative_int(summary.get("estimatedPomo")) > 0
+        ]
+        if len(estimates) == 1:
+            estimated_seconds = _nonnegative_int(estimates[0].get("estimatedDuration"))
+            estimated_pomo = _nonnegative_int(estimates[0].get("estimatedPomo"))
+        elif len(estimates) > 1:
+            ambiguous = True
+
+    estimated_minutes = (estimated_seconds + 59) // 60
+    if ambiguous and not estimated_minutes and not estimated_pomo:
+        return {
+            "focusMinutes": default_minutes,
+            "durationSource": "default_ambiguous",
+            "estimatedDurationMinutes": 0,
+            "estimatedPomo": 0,
+        }
+
+    if estimated_minutes:
+        if estimated_minutes <= 15:
+            focus_minutes = max(5, estimated_minutes)
+        elif estimated_minutes <= 35:
+            focus_minutes = 25
+        else:
+            focus_minutes = 50
+        return {
+            "focusMinutes": focus_minutes,
+            "durationSource": "estimated_duration",
+            "estimatedDurationMinutes": estimated_minutes,
+            "estimatedPomo": estimated_pomo,
+        }
+
+    if estimated_pomo:
+        return {
+            "focusMinutes": DEFAULT_FOCUS_MINUTES,
+            "durationSource": "estimated_pomo",
+            "estimatedDurationMinutes": 0,
+            "estimatedPomo": estimated_pomo,
+        }
+
+    return {
+        "focusMinutes": default_minutes,
+        "durationSource": "default",
+        "estimatedDurationMinutes": 0,
+        "estimatedPomo": 0,
+    }
 
 
 def _require_focus(current: dict[str, Any]) -> None:
@@ -141,6 +216,7 @@ def run_focus_start(
     duration: int = 25,
     note: str = "",
     task_id: str = "",
+    auto_duration: bool = False,
 ) -> dict[str, Any]:
     """Start a live TickTick focus timer, optionally linked to a task.
 
@@ -150,16 +226,35 @@ def run_focus_start(
 
     if duration <= 0:
         raise click.ClickException("Focus duration must be greater than zero.")
+    if auto_duration and not task_id:
+        raise click.ClickException("Automatic focus duration requires a linked task ID.")
 
     last_point, current = _current_focus(client)
-    if (
-        current
-        and not current.get("exited", True)
-        and current.get("status", 3) in (0, 1, 2)
-    ):
+    if current and not current.get("exited", True) and current.get("status", 3) in (0, 1, 2):
         raise click.ClickException(
             "A focus session or rest break is already active. Finish or abandon it first."
         )
+
+    duration_plan = {
+        "focusMinutes": duration,
+        "durationSource": "manual",
+        "estimatedDurationMinutes": 0,
+        "estimatedPomo": 0,
+    }
+    if auto_duration:
+        try:
+            duration_plan = resolve_focus_duration(
+                client.v2.get_task(task_id),
+                default_minutes=duration,
+            )
+        except RateLimitError:
+            duration_plan = {
+                "focusMinutes": duration,
+                "durationSource": "default_rate_limited",
+                "estimatedDurationMinutes": 0,
+                "estimatedPomo": 0,
+            }
+        duration = duration_plan["focusMinutes"]
 
     session_id = _generate_object_id()
     now = _utcnow()
@@ -184,6 +279,10 @@ def run_focus_start(
         "action": "started",
         "sessionId": started.get("id", session_id),
         "duration": duration,
+        "focusMinutes": duration,
+        "durationSource": duration_plan["durationSource"],
+        "estimatedDurationMinutes": duration_plan["estimatedDurationMinutes"],
+        "estimatedPomo": duration_plan["estimatedPomo"],
         "startTime": started.get("startTime", _fmt_utc(now)),
         "endTime": started.get("endTime", ""),
         "taskId": task_id or None,
@@ -193,9 +292,7 @@ def run_focus_start(
     }
 
 
-def _resolve_date_range(
-    from_date: str | None, to_date: str | None, days: int
-) -> tuple[date, date]:
+def _resolve_date_range(from_date: str | None, to_date: str | None, days: int) -> tuple[date, date]:
     """Resolve CLI options to a (start, end) date pair."""
     if from_date and to_date:
         start = datetime.strptime(from_date, "%Y-%m-%d").date()
@@ -221,16 +318,85 @@ def focus_group() -> None:
 @click.option("--duration", "-d", type=int, default=25, help="Duration in minutes (default: 25).")
 @click.option("--note", "-n", default="", help="Focus note.")
 @click.option("--task", "-t", default="", help="Task ID to link this focus session to.")
+@click.option(
+    "--auto-duration",
+    is_flag=True,
+    help="Use the linked task's native estimate; fall back to --duration.",
+)
 @click.pass_context
-def focus_start(ctx: click.Context, duration: int, note: str, task: str) -> None:
+def focus_start(
+    ctx: click.Context,
+    duration: int,
+    note: str,
+    task: str,
+    auto_duration: bool,
+) -> None:
     """Start a pomodoro focus timer."""
     if is_dry_run(ctx):
-        output_dry_run("focus start", {"duration": duration, "note": note, "task": task}, ctx)
+        output_dry_run(
+            "focus start",
+            {
+                "duration": duration,
+                "note": note,
+                "task": task,
+                "auto_duration": auto_duration,
+            },
+            ctx,
+        )
         return
 
     client = get_client(ctx.obj.get("profile", "default"))
     try:
-        output_item(run_focus_start(client, duration=duration, note=note, task_id=task), ctx)
+        output_item(
+            run_focus_start(
+                client,
+                duration=duration,
+                note=note,
+                task_id=task,
+                auto_duration=auto_duration,
+            ),
+            ctx,
+        )
+    except click.ClickException as exc:
+        output_error(str(exc), ctx)
+        raise SystemExit(1) from None
+    except Exception as exc:
+        output_error(str(exc), ctx)
+        raise SystemExit(1) from None
+
+
+@focus_group.command("recommend")
+@click.argument("task_id")
+@click.option(
+    "--fallback",
+    "fallback_minutes",
+    type=int,
+    default=DEFAULT_FOCUS_MINUTES,
+    help="Fallback duration when the task has no estimate (default: 25).",
+)
+@click.pass_context
+def focus_recommend(ctx: click.Context, task_id: str, fallback_minutes: int) -> None:
+    """Recommend one focus block from a task's native TickTick estimate."""
+
+    if is_dry_run(ctx):
+        output_dry_run(
+            "focus recommend",
+            {"task_id": task_id, "fallback_minutes": fallback_minutes},
+            ctx,
+        )
+        return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        task = client.v2.get_task(task_id)
+        output_item(
+            {
+                "taskId": task_id,
+                "title": task.get("title", ""),
+                **resolve_focus_duration(task, default_minutes=fallback_minutes),
+            },
+            ctx,
+        )
     except click.ClickException as exc:
         output_error(str(exc), ctx)
         raise SystemExit(1) from None
@@ -243,7 +409,9 @@ def focus_start(ctx: click.Context, duration: int, note: str, task: str) -> None
 
 
 @focus_group.command("stop")
-@click.option("--save/--no-save", default=True, help="Save the record (default: save). --no-save abandons.")
+@click.option(
+    "--save/--no-save", default=True, help="Save the record (default: save). --no-save abandons."
+)
 @click.pass_context
 def focus_stop(ctx: click.Context, save: bool) -> None:
     """Stop the current pomodoro focus timer.
@@ -443,7 +611,9 @@ def focus_abandon(ctx: click.Context) -> None:
 
 
 @focus_group.command("start-break")
-@click.option("--duration", "-d", type=int, default=5, help="Break duration in minutes (default: 5).")
+@click.option(
+    "--duration", "-d", type=int, default=5, help="Break duration in minutes (default: 5)."
+)
 @click.pass_context
 def focus_start_break(ctx: click.Context, duration: int) -> None:
     """Start a rest break after a Pomodoro focus timer."""
@@ -554,7 +724,9 @@ def focus_link(ctx: click.Context, task_id: str) -> None:
 
 
 @focus_group.command("log")
-@click.option("--start", "start_time", required=True, help="Start time (HH:MM or YYYY-MM-DDTHH:MM).")
+@click.option(
+    "--start", "start_time", required=True, help="Start time (HH:MM or YYYY-MM-DDTHH:MM)."
+)
 @click.option("--end", "end_time", required=True, help="End time (HH:MM or YYYY-MM-DDTHH:MM).")
 @click.option("--note", "-n", default="", help="Focus note.")
 @click.pass_context
@@ -672,7 +844,9 @@ def focus_stats(ctx: click.Context) -> None:
 @click.option("--to", "to_date", default=None, help="End date (YYYY-MM-DD)")
 @click.option("--days", type=int, default=30, help="Number of days (default: 30)")
 @click.pass_context
-def focus_heatmap(ctx: click.Context, from_date: str | None, to_date: str | None, days: int) -> None:
+def focus_heatmap(
+    ctx: click.Context, from_date: str | None, to_date: str | None, days: int
+) -> None:
     """View focus time heatmap data."""
     client = get_client(ctx.obj.get("profile", "default"))
     start, end = _resolve_date_range(from_date, to_date, days)
@@ -723,9 +897,7 @@ def focus_by_tag(ctx: click.Context, from_date: str | None, to_date: str | None,
                 ("tagDurations", "tag"),
                 ("taskDurations", "task"),
             ]:
-                for name, minutes in sorted(
-                    data.get(section_key, {}).items(), key=lambda x: -x[1]
-                ):
+                for name, minutes in sorted(data.get(section_key, {}).items(), key=lambda x: -x[1]):
                     sections.append({"type": label, "name": name, "minutes": minutes})
             output_list(
                 sections,
@@ -773,6 +945,4 @@ def _parse_time(time_str: str) -> datetime:
     except ValueError:
         pass
 
-    raise ValueError(
-        f"Cannot parse time: '{time_str}'. Use HH:MM or YYYY-MM-DDTHH:MM"
-    )
+    raise ValueError(f"Cannot parse time: '{time_str}'. Use HH:MM or YYYY-MM-DDTHH:MM")

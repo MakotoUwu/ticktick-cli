@@ -1,0 +1,65 @@
+# TickTick Web Contracts
+
+This file records the smallest stable web-app behavior that the CLI needs when
+TickTick's official Open API does not expose a product feature. It is an
+implementation contract, not a copy of browser credentials or captured private
+task data.
+
+## Focus Estimates
+
+TickTick's current product supports Estimated Pomo and Estimated Duration on a
+task. The official behavior is described in TickTick's
+[Estimation](https://help.ticktick.com/articles/7055792921664028672) and
+[Start Focus](https://help.ticktick.com/articles/7055782010496745472) guides.
+
+Browser inspection on 2026-07-12 confirmed that task records returned by the
+web app's incremental batch response carry user-scoped `focusSummaries` rows:
+
+```json
+{
+  "focusSummaries": [
+    {
+      "userId": 123,
+      "estimatedPomo": 2,
+      "estimatedDuration": 5400,
+      "pomoCount": 0,
+      "pomoDuration": 0,
+      "stopwatchDuration": 0
+    }
+  ]
+}
+```
+
+- `estimatedPomo` is a Pomodoro count.
+- `estimatedDuration` is stored in seconds.
+- Estimates are user-scoped. The CLI flattens estimate fields only when exactly
+  one non-empty summary exists; multiple summaries are reported as ambiguous.
+- The official V1 folder snapshot does not currently provide these fields. The
+  CLI reads the V2 task detail once when recommending or starting estimated
+  focus.
+
+## Duration Policy
+
+`ticktick focus recommend TASK_ID` is read-only. `ticktick focus start --task
+TASK_ID --auto-duration` applies the same resolver and then starts the session:
+
+- Estimated Duration up to 15 minutes: use the estimate, with a 5-minute floor.
+- Estimated Duration from 16 through 35 minutes: start one 25-minute block.
+- Estimated Duration over 35 minutes: start one 50-minute block.
+- Estimated Pomo without duration: start the first 25-minute Pomodoro.
+- Missing or ambiguous estimate: use the requested fallback, 25 minutes by
+  default.
+- Rate-limited estimate read: start the fallback and return
+  `durationSource: default_rate_limited` instead of retrying repeatedly.
+
+The command output always reports `focusMinutes`, `durationSource`,
+`estimatedDurationMinutes`, and `estimatedPomo`, so callers can distinguish
+native estimates from fallbacks.
+
+## Maintenance Rule
+
+Use Chrome DevTools only to discover or verify a missing contract. Once the
+behavior is understood, add a typed CLI field or command, focused tests, and a
+short contract update here. Normal Mission Control operation should then use
+the CLI, not browser automation. Never commit cookies, tokens, authorization
+headers, full private responses, or temporary captures.

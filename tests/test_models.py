@@ -88,6 +88,39 @@ class TestTaskModel:
         assert out["reminders"] == [{"id": "r1", "trigger": "TRIGGER:-PT30M"}]
         assert out["commentCount"] == 2
 
+    def test_focus_estimate_to_output(self) -> None:
+        task = Task(
+            id="t1",
+            focusSummaries=[
+                {
+                    "userId": 123,
+                    "estimatedPomo": 0,
+                    "estimatedDuration": 5_400,
+                }
+            ],
+        )
+
+        out = task.to_output()
+
+        assert out["estimatedPomo"] == 0
+        assert out["estimatedDurationSeconds"] == 5_400
+        assert out["estimatedDurationMinutes"] == 90
+        assert out["focusSummaries"][0]["userId"] == 123
+
+    def test_multiple_user_focus_estimates_are_not_flattened(self) -> None:
+        task = Task(
+            id="t1",
+            focusSummaries=[
+                {"userId": 123, "estimatedPomo": 2, "estimatedDuration": 0},
+                {"userId": 456, "estimatedPomo": 1, "estimatedDuration": 0},
+            ],
+        )
+
+        out = task.to_output()
+
+        assert out["focusEstimateAmbiguous"] is True
+        assert "estimatedPomo" not in out
+
     def test_string_reminders_to_output(self) -> None:
         task = Task(id="t1", reminders=["TRIGGER:-PT30M"], commentCount=1)
         out = task.to_output()

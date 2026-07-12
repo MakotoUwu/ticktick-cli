@@ -8,6 +8,13 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+def _nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 class TaskPriority(IntEnum):
     """TickTick priority levels."""
 
@@ -60,6 +67,7 @@ class Task(BaseModel):
     repeat_first_date: str | None = Field(default=None, alias="repeatFirstDate")
     reminders: list[dict[str, Any] | str] | None = None
     comment_count: int | None = Field(default=None, alias="commentCount")
+    focus_summaries: list[dict[str, Any]] = Field(default_factory=list, alias="focusSummaries")
 
     model_config = {"populate_by_name": True, "extra": "allow"}
 
@@ -114,4 +122,20 @@ class Task(BaseModel):
             "columnName": self.column_name,
         }
         output.update({key: value for key, value in optional.items() if value is not None})
+        if self.focus_summaries:
+            output["focusSummaries"] = self.focus_summaries
+            estimates = [
+                summary
+                for summary in self.focus_summaries
+                if _nonnegative_int(summary.get("estimatedPomo")) > 0
+                or _nonnegative_int(summary.get("estimatedDuration")) > 0
+            ]
+            if len(estimates) == 1:
+                estimated_pomo = _nonnegative_int(estimates[0].get("estimatedPomo"))
+                estimated_seconds = _nonnegative_int(estimates[0].get("estimatedDuration"))
+                output["estimatedPomo"] = estimated_pomo
+                output["estimatedDurationSeconds"] = estimated_seconds
+                output["estimatedDurationMinutes"] = (estimated_seconds + 59) // 60
+            elif len(estimates) > 1:
+                output["focusEstimateAmbiguous"] = True
         return output
