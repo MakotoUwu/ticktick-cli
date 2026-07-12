@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Marketplace-ready Claude Code plugin bundle with packaged TickTick commands and operator Skill
 - Agent metadata in `ticktick schema`, including mutation, confirmation, dry-run, and auth requirements per command
 - Read-only `ticktick web-cache audit` command for analyzing exported TickTick web-cache snapshots when live API reads are rate-limited
+- `ticktick task reopen` for restoring tasks completed by mistake, with an explicit project fallback for rate-limited reads
 
 ### Changed
 

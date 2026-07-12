@@ -38,6 +38,7 @@ _EITHER_API_COMMANDS = {
     "task done",
     "task edit",
     "task list",
+    "task reopen",
     "task show",
 }
 
@@ -95,6 +96,7 @@ _MUTATING_COMMANDS = {
     "task edit",
     "task move",
     "task pin",
+    "task reopen",
     "task skip",
     "task unpin",
     "template create",
@@ -152,6 +154,7 @@ _DRY_RUN_COMMANDS = {
     "task edit",
     "task move",
     "task pin",
+    "task reopen",
     "task skip",
     "task unpin",
     "template create",

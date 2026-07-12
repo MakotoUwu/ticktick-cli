@@ -139,6 +139,9 @@ ticktick task edit TASK_ID --due monday --start monday --all-day --timezone Euro
 # Complete it
 ticktick task done TASK_ID
 
+# Restore a task completed by mistake
+ticktick task reopen TASK_ID --project PROJECT_ID
+
 # What's overdue?
 ticktick task overdue
 

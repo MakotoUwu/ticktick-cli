@@ -115,6 +115,9 @@ ticktick task search "quarterly report"
 # Complete one or more tasks
 ticktick task done TASK_ID
 
+# Restore a task completed by mistake
+ticktick task reopen TASK_ID --project PROJECT_ID
+
 # Edit a task
 ticktick task edit TASK_ID --title "Updated title" --priority medium
 

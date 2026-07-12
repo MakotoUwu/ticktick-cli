@@ -353,6 +353,39 @@ class TestTaskDone:
         mock_client.v1.complete_task.assert_called_once_with("proj2", "task1")
 
 
+class TestTaskReopen:
+    def test_reopen_with_project_uses_v1(
+        self, runner: CliRunner, mock_client: MagicMock
+    ) -> None:
+        with patch("ticktick_cli.commands.task_cmd.get_client", return_value=mock_client):
+            result = runner.invoke(
+                cli,
+                ["task", "reopen", "task1", "--project", "proj2"],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "Reopened 1 task(s)" in data["message"]
+        mock_client.v1.update_task.assert_called_once_with(
+            "task1",
+            {"id": "task1", "projectId": "proj2", "status": 0},
+        )
+        mock_client.v2.batch_tasks.assert_not_called()
+
+    def test_reopen_dry_run_does_not_create_client(self, runner: CliRunner) -> None:
+        with patch("ticktick_cli.commands.task_cmd.get_client") as get_client:
+            result = runner.invoke(
+                cli,
+                ["--dry-run", "task", "reopen", "task1", "--project", "proj2"],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["dry_run"] is True
+        assert data["action"] == "task.reopen"
+        get_client.assert_not_called()
+
+
 class TestTaskAbandon:
     def test_abandon_falls_back_to_v1_when_v2_lookup_is_rate_limited(
         self, runner: CliRunner, mock_client: MagicMock

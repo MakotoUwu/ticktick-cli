@@ -517,6 +517,54 @@ def task_done(ctx: click.Context, task_ids: tuple[str, ...]) -> None:
         _handle_task_error(e, ctx)
 
 
+@task_group.command("reopen")
+@click.argument("task_ids", nargs=-1, required=True)
+@click.option(
+    "--project",
+    default=None,
+    help="Project name or ID. Recommended when reopening a completed task.",
+)
+@click.pass_context
+def task_reopen(
+    ctx: click.Context,
+    task_ids: tuple[str, ...],
+    project: str | None,
+) -> None:
+    """Restore completed task(s) to active status."""
+    if is_dry_run(ctx):
+        output_dry_run(
+            "task.reopen",
+            {"task_ids": list(task_ids), "project": project},
+            ctx,
+        )
+        return
+
+    client = get_client(ctx.obj.get("profile", "default"))
+    try:
+        project_id = _resolve_project_id(client, project) if project else None
+        updates = []
+        for tid in task_ids:
+            if project_id:
+                task_project_id = project_id
+            else:
+                task = _get_task_any(client, tid)
+                task_project_id = task.get("projectId", "")
+            if not task_project_id:
+                raise ValueError(
+                    f"Could not determine the project for task {tid}. Pass --project NAME_OR_ID."
+                )
+            updates.append({"id": tid, "projectId": task_project_id, "status": 0})
+
+        if client.has_v1:
+            for update in updates:
+                client.v1.update_task(update["id"], update)
+        elif client.has_v2:
+            client.v2.batch_tasks(update=updates)
+        output_message(f"Reopened {len(task_ids)} task(s).", ctx)
+    except Exception as e:
+        _handle_task_error(e, ctx)
+
+
 @task_group.command("abandon")
 @click.argument("task_ids", nargs=-1, required=True)
 @click.pass_context

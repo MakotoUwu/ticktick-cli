@@ -89,6 +89,11 @@ class TestSchemaCommand:
         assert task_list["agent"]["mutates"] is False
         assert task_list["agent"]["requires_auth"] is True
 
+        task_reopen = next(c for c in commands if c["command"].endswith("task reopen"))
+        assert task_reopen["agent"]["mutates"] is True
+        assert task_reopen["agent"]["supports_dry_run"] is True
+        assert task_reopen["agent"]["auth_api"] == "either"
+
         auth_status = next(c for c in commands if c["command"].endswith("auth status"))
         assert auth_status["agent"]["auth_api"] == "none"
         assert auth_status["agent"]["requires_auth"] is False
