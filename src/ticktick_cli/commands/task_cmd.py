@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, NoReturn
@@ -16,7 +17,7 @@ from ticktick_cli.api.v2 import (
 )
 from ticktick_cli.auth import get_client
 from ticktick_cli.dates import parse_date
-from ticktick_cli.exceptions import TickTickCLIError, handle_cli_error
+from ticktick_cli.exceptions import APIError, NotFoundError, TickTickCLIError, handle_cli_error
 from ticktick_cli.models.comment import Activity, Comment
 from ticktick_cli.models.task import Task
 from ticktick_cli.output import (
@@ -60,6 +61,33 @@ _V1_TASK_EDIT_FIELDS = {
     "columnId",
 }
 _V1_TASK_CREATE_FIELDS = _V1_TASK_EDIT_FIELDS - {"id", "tags", "columnId"}
+_BATCH_EDIT_ALIASES = {
+    "taskId": "id",
+    "task_id": "id",
+    "project_id": "projectId",
+    "start": "startDate",
+    "due": "dueDate",
+    "allDay": "isAllDay",
+    "all_day": "isAllDay",
+    "timezone": "timeZone",
+    "repeat": "repeatFlag",
+    "column": "columnId",
+}
+_BATCH_EDIT_FIELDS = {
+    "id",
+    "projectId",
+    "title",
+    "content",
+    "priority",
+    "startDate",
+    "dueDate",
+    "isAllDay",
+    "timeZone",
+    "tags",
+    "repeatFlag",
+    "columnId",
+}
+_BATCH_EDIT_LIMIT = 100
 
 
 def _handle_task_error(error: Exception, ctx: click.Context) -> NoReturn:
@@ -93,6 +121,128 @@ def _format_task(task: dict[str, Any]) -> dict[str, Any]:
             "sortOrder": task.get("sortOrder"),
             "items": task.get("items", []),  # subtask checklist items
         }
+
+
+def _load_batch_edit_updates(filepath: str) -> list[dict[str, Any]]:
+    """Load and normalize a bounded task-edit batch from JSON."""
+    payload = json.loads(Path(filepath).read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        payload = [payload]
+    if not isinstance(payload, list) or not payload:
+        raise ValueError("Batch edit file must contain a non-empty JSON object or array.")
+    if len(payload) > _BATCH_EDIT_LIMIT:
+        raise ValueError(f"Batch edit supports at most {_BATCH_EDIT_LIMIT} tasks per request.")
+
+    updates: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for index, raw_item in enumerate(payload, start=1):
+        if not isinstance(raw_item, dict):
+            raise ValueError(f"Batch edit item {index} must be a JSON object.")
+
+        update: dict[str, Any] = {}
+        for raw_key, value in raw_item.items():
+            key = _BATCH_EDIT_ALIASES.get(raw_key, raw_key)
+            if key not in _BATCH_EDIT_FIELDS:
+                raise ValueError(f"Batch edit item {index} has unsupported field '{raw_key}'.")
+            if key in update and update[key] != value:
+                raise ValueError(f"Batch edit item {index} provides conflicting values for '{key}'.")
+            update[key] = value
+
+        task_id = update.get("id")
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise ValueError(f"Batch edit item {index} requires a non-empty task id.")
+        task_id = task_id.strip()
+        if task_id in seen_ids:
+            raise ValueError(f"Batch edit contains duplicate task id '{task_id}'.")
+        seen_ids.add(task_id)
+        update["id"] = task_id
+
+        project_id = update.get("projectId")
+        if project_id is not None:
+            if not isinstance(project_id, str) or not project_id.strip():
+                raise ValueError(f"Batch edit item {index} has an invalid projectId.")
+            update["projectId"] = project_id.strip()
+
+        priority = update.get("priority")
+        if isinstance(priority, str):
+            if priority not in PRIORITY_MAP:
+                raise ValueError(
+                    f"Batch edit item {index} priority must be one of: "
+                    f"{', '.join(PRIORITY_MAP)}."
+                )
+            update["priority"] = PRIORITY_MAP[priority]
+        elif isinstance(priority, bool) or (
+            priority is not None and priority not in PRIORITY_REVERSE
+        ):
+            raise ValueError(f"Batch edit item {index} has unsupported priority '{priority}'.")
+
+        for date_field in ("startDate", "dueDate"):
+            if date_field not in update:
+                continue
+            date_value = update[date_field]
+            if not isinstance(date_value, str) or not date_value.strip():
+                raise ValueError(f"Batch edit item {index} has an invalid {date_field}.")
+            update[date_field] = parse_date(date_value)
+
+        if "isAllDay" in update and not isinstance(update["isAllDay"], bool):
+            raise ValueError(f"Batch edit item {index} isAllDay must be true or false.")
+        if "tags" in update and (
+            not isinstance(update["tags"], list)
+            or not all(isinstance(tag, str) for tag in update["tags"])
+        ):
+            raise ValueError(f"Batch edit item {index} tags must be an array of strings.")
+        for field in ("title", "content", "timeZone", "repeatFlag", "columnId"):
+            if field in update and not isinstance(update[field], str):
+                raise ValueError(f"Batch edit item {index} field '{field}' must be a string.")
+        if "title" in update and not update["title"].strip():
+            raise ValueError(f"Batch edit item {index} title must not be empty.")
+
+        changed_fields = set(update) - {"id", "projectId"}
+        if not changed_fields:
+            raise ValueError(f"Batch edit item {index} does not contain any changes.")
+        updates.append(update)
+    return updates
+
+
+def _resolve_batch_edit_project_ids(client: Any, updates: list[dict[str, Any]]) -> int:
+    """Resolve every missing projectId with one V2 account-state read."""
+    missing = [update for update in updates if not update.get("projectId")]
+    if not missing:
+        return 0
+
+    state = client.v2.sync_web()
+    tasks = state.get("syncTaskBean", {}).get("update", [])
+    projects_by_task_id = {
+        task.get("id"): task.get("projectId")
+        for task in tasks
+        if task.get("id") and task.get("projectId")
+    }
+    unresolved: list[str] = []
+    for update in missing:
+        project_id = projects_by_task_id.get(update["id"])
+        if project_id:
+            update["projectId"] = project_id
+        else:
+            unresolved.append(update["id"])
+    if unresolved:
+        raise NotFoundError(
+            "Could not resolve projectId for task(s): " + ", ".join(unresolved) + ". "
+            "Provide projectId explicitly or verify that the tasks are active."
+        )
+    return len(missing)
+
+
+def _raise_batch_task_errors(result: Any) -> None:
+    """Fail closed when TickTick returns per-task errors with HTTP 200."""
+    if not isinstance(result, dict):
+        return
+    errors = {str(key): value for key, value in (result.get("id2error") or {}).items() if value}
+    if errors:
+        raise APIError(
+            "TickTick rejected one or more task edits: "
+            + "; ".join(f"{task_id}: {error}" for task_id, error in errors.items()),
+            response_body=json.dumps(errors),
+        )
 
 
 def _format_attachment(attachment: dict[str, Any]) -> dict[str, Any]:
@@ -831,8 +981,6 @@ def task_unpin(ctx: click.Context, task_id: str) -> None:
 @click.pass_context
 def task_batch_add(ctx: click.Context, filepath: str) -> None:
     """Bulk create tasks from a JSON file."""
-    import json
-
     try:
         with open(filepath) as f:
             tasks = json.load(f)
@@ -849,6 +997,58 @@ def task_batch_add(ctx: click.Context, filepath: str) -> None:
         client = get_client(ctx.obj.get("profile", "default"))
         client.v2.batch_tasks(add=tasks)
         output_message(f"Created {len(tasks)} task(s) from {filepath}.", ctx)
+    except Exception as e:
+        _handle_task_error(e, ctx)
+
+
+@task_group.command("batch-edit")
+@click.option(
+    "--file",
+    "-f",
+    "filepath",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    help="JSON object or array with task edits.",
+)
+@click.pass_context
+def task_batch_edit(ctx: click.Context, filepath: str) -> None:
+    """Edit up to 100 tasks with one bounded V2 batch request."""
+    try:
+        updates = _load_batch_edit_updates(filepath)
+        unresolved_ids = [update["id"] for update in updates if not update.get("projectId")]
+        if is_dry_run(ctx):
+            output_dry_run(
+                "task.batch-edit",
+                {
+                    "file": filepath,
+                    "count": len(updates),
+                    "updates": updates,
+                    "requiresProjectLookup": unresolved_ids,
+                    "estimatedRequests": 2 if unresolved_ids else 1,
+                },
+                ctx,
+            )
+            return
+
+        client = get_client(ctx.obj.get("profile", "default"))
+        resolved_count = _resolve_batch_edit_project_ids(client, updates)
+        result = client.v2.batch_tasks(update=updates)
+        _raise_batch_task_errors(result)
+        etags = result.get("id2etag", {}) if isinstance(result, dict) else {}
+        output_item(
+            {
+                "updated": len(updates),
+                "taskIds": [update["id"] for update in updates],
+                "resolvedProjectIds": resolved_count,
+                "providerEtags": {
+                    update["id"]: etags[update["id"]]
+                    for update in updates
+                    if update["id"] in etags
+                },
+            },
+            ctx,
+            message=f"Updated {len(updates)} task(s) in one batch.",
+        )
     except Exception as e:
         _handle_task_error(e, ctx)
 

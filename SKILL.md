@@ -133,6 +133,9 @@ ticktick task completed --from "7 days ago"
 # Batch add tasks from a JSON file
 ticktick task batch-add --file tasks.json
 
+# Batch edit tasks with one bounded V2 write
+ticktick task batch-edit --file updates.json
+
 # Select only specific fields
 ticktick task list --fields id,title,priority,dueDate
 ```

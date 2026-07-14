@@ -21,6 +21,7 @@ import httpx
 from ticktick_cli.api.base import BaseClient
 
 V2_BASE = "https://api.ticktick.com/api/v2"
+V3_BASE = "https://api.ticktick.com/api/v3"
 V1_BASE = "https://api.ticktick.com/api/v1"
 
 # Minimal headers that make V2 API work (from pyticktick)
@@ -143,6 +144,10 @@ class V2Client(BaseClient):
     def sync(self) -> dict[str, Any]:
         """Get complete account state (all tasks, projects, tags, etc.)."""
         return self.get("/batch/check/0")
+
+    def sync_web(self) -> dict[str, Any]:
+        """Get current web-app state through TickTick's V3 batch endpoint."""
+        return self.get(f"{V3_BASE}/batch/check/0")
 
     # ── User ──────────────────────────────────────────────────
 

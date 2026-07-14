@@ -136,6 +136,9 @@ ticktick task add "Review pull request" --priority high --due tomorrow
 ticktick task add "Weekly review" --due monday --all-day --timezone Europe/Brussels
 ticktick task edit TASK_ID --due monday --start monday --all-day --timezone Europe/Brussels
 
+# Edit several tasks with one batch request
+ticktick task batch-edit --file updates.json
+
 # Complete it
 ticktick task done TASK_ID
 
@@ -194,6 +197,12 @@ ticktick task list --fields id,title,priority
 ticktick sync
 ```
 
+`batch-edit` accepts a JSON object or an array of up to 100 edits. Include
+`projectId` to make the operation a single network request; otherwise the CLI
+resolves all missing project IDs with one account-state read. Use
+`ticktick --dry-run task batch-edit --file updates.json` to validate and
+normalize the payload without writing.
+
 ### JSON output (default)
 
 ```json
@@ -228,7 +237,7 @@ ticktick sync
 
 | Domain | Commands | API |
 |--------|----------|-----|
-| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `skip` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` `duplicate` `convert` `activity` `attachment list` `attachment add` `comment list` `comment add` `comment delete` | V1+V2 |
+| **Tasks** | `add` `list` `show` `edit` `done` `abandon` `delete` `move` `skip` `search` `today` `overdue` `completed` `trash` `pin` `unpin` `batch-add` `batch-edit` `duplicate` `convert` `activity` `attachment list` `attachment add` `comment list` `comment add` `comment delete` | V1+V2 |
 | **Subtasks** | `set` `unset` `list` | V2 |
 | **Projects** | `list` `create` `show` `edit` `delete` | V1+V2 |
 | **Folders** | `list` `create` `rename` `delete` | V2 |

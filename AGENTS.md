@@ -40,6 +40,7 @@ ticktick task trash [--limit N]
 ticktick task pin TASK_ID
 ticktick task unpin TASK_ID
 ticktick task batch-add --file tasks.json
+ticktick task batch-edit --file updates.json
 ticktick task duplicate TASK_ID
 ticktick task convert TASK_ID --to note|task
 ticktick task activity TASK_ID [--limit N]

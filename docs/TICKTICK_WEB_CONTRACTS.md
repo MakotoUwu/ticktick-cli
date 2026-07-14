@@ -73,6 +73,45 @@ to identify the positive-length timed task whose window is active now.
 This selection command is read-only. The Mission Control runtime owns the
 separate opt-in decision to start the returned task.
 
+## Low-Request Task Batch Edits
+
+Browser inspection on 2026-07-14 confirmed the task synchronization and write
+contracts used by the current TickTick web app:
+
+- `GET /api/v3/batch/check/0` returns the current account task state in one
+  response.
+- `POST /api/v2/batch/task` accepts `add`, `update`, and `delete` arrays and
+  returns per-item `id2etag` receipts plus `id2error` failures.
+
+`ticktick task batch-edit --file updates.json` uses the existing authenticated
+V2 client and that batch-write contract. It performs no lookup when every row
+contains `projectId`. If one or more rows omit `projectId`, it performs exactly
+one account-state read and resolves all missing project IDs before issuing one
+write. A non-empty `id2error` response fails the command even when the HTTP
+request itself returned 200.
+
+The input accepts canonical web fields and a small set of agent-friendly
+aliases. Use explicit UTC offsets for exact local times:
+
+```json
+[
+  {
+    "id": "TASK_ID",
+    "projectId": "PROJECT_ID",
+    "title": "Updated title",
+    "priority": "high",
+    "start": "2026-07-15T08:45:00+02:00",
+    "due": "2026-07-15T09:15:00+02:00",
+    "allDay": false,
+    "timezone": "Europe/Brussels"
+  }
+]
+```
+
+The command is deliberately limited to 100 task edits. Parent/subtask changes
+remain on the dedicated `/batch/taskParent` command path because adding a
+`parentId` to ordinary task updates did not persist reliably during inspection.
+
 ## Maintenance Rule
 
 Use Chrome DevTools only to discover or verify a missing contract. Once the

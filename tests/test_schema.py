@@ -94,6 +94,13 @@ class TestSchemaCommand:
         assert task_reopen["agent"]["supports_dry_run"] is True
         assert task_reopen["agent"]["auth_api"] == "either"
 
+        task_batch_edit = next(
+            c for c in commands if c["command"].endswith("task batch-edit")
+        )
+        assert task_batch_edit["agent"]["mutates"] is True
+        assert task_batch_edit["agent"]["supports_dry_run"] is True
+        assert task_batch_edit["agent"]["auth_api"] == "v2"
+
         auth_status = next(c for c in commands if c["command"].endswith("auth status"))
         assert auth_status["agent"]["auth_api"] == "none"
         assert auth_status["agent"]["requires_auth"] is False

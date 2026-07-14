@@ -1,5 +1,5 @@
 """Tests for untested task subcommands — edit, abandon, pin, unpin, today,
-overdue, completed, trash, batch-add."""
+overdue, completed, trash, batch-add, and batch-edit."""
 
 from __future__ import annotations
 
@@ -727,6 +727,186 @@ class TestTaskBatchAdd:
         finally:
             os.unlink(tmppath)
 
+
+# ── Task Batch-Edit ──────────────────────────────────────────
+
+
+class TestTaskBatchEdit:
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_batch_edit_uses_one_write_when_project_ids_are_present(
+        self, mock_get: MagicMock
+    ) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.batch_tasks.return_value = {
+            "id2etag": {"task1": "etag1", "task2": "etag2"},
+            "id2error": {},
+        }
+        edits = [
+            {
+                "id": "task1",
+                "projectId": "project1",
+                "title": "Updated title",
+                "priority": "high",
+            },
+            {
+                "taskId": "task2",
+                "project_id": "project2",
+                "start": "2026-07-15T08:45:00+02:00",
+                "due": "2026-07-15T09:15:00+02:00",
+                "allDay": False,
+                "timezone": "Europe/Brussels",
+            },
+        ]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(edits, f)
+            tmppath = f.name
+
+        try:
+            result = CliRunner().invoke(
+                task_group,
+                ["batch-edit", "--file", tmppath],
+                obj=_make_ctx(),
+            )
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data["data"]["updated"] == 2
+            assert data["data"]["resolvedProjectIds"] == 0
+            assert data["data"]["providerEtags"] == {
+                "task1": "etag1",
+                "task2": "etag2",
+            }
+            client.v2.sync_web.assert_not_called()
+            updates = client.v2.batch_tasks.call_args.kwargs["update"]
+            assert updates[0]["priority"] == 5
+            assert updates[1]["startDate"] == "2026-07-15T06:45:00.000+0000"
+            assert updates[1]["dueDate"] == "2026-07-15T07:15:00.000+0000"
+            assert updates[1]["isAllDay"] is False
+        finally:
+            os.unlink(tmppath)
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_batch_edit_resolves_missing_projects_with_one_sync(
+        self, mock_get: MagicMock
+    ) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.sync_web.return_value = {
+            "syncTaskBean": {
+                "update": [
+                    {"id": "task1", "projectId": "project1"},
+                    {"id": "task2", "projectId": "project2"},
+                ]
+            }
+        }
+        client.v2.batch_tasks.return_value = {"id2etag": {}, "id2error": {}}
+        edits = [
+            {"id": "task1", "title": "First"},
+            {"id": "task2", "content": "Second"},
+        ]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(edits, f)
+            tmppath = f.name
+
+        try:
+            result = CliRunner().invoke(
+                task_group,
+                ["batch-edit", "--file", tmppath],
+                obj=_make_ctx(),
+            )
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data["data"]["resolvedProjectIds"] == 2
+            client.v2.sync_web.assert_called_once_with()
+            client.v2.batch_tasks.assert_called_once()
+            updates = client.v2.batch_tasks.call_args.kwargs["update"]
+            assert [update["projectId"] for update in updates] == ["project1", "project2"]
+        finally:
+            os.unlink(tmppath)
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_batch_edit_dry_run_normalizes_without_auth(self, mock_get: MagicMock) -> None:
+        edits = [
+            {
+                "id": "task1",
+                "start": "2026-07-15T08:45:00+02:00",
+                "due": "2026-07-15T09:15:00+02:00",
+                "all_day": False,
+            }
+        ]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(edits, f)
+            tmppath = f.name
+
+        try:
+            result = CliRunner().invoke(
+                task_group,
+                ["batch-edit", "--file", tmppath],
+                obj=_make_ctx(dry_run=True),
+            )
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data["dry_run"] is True
+            assert data["action"] == "task.batch-edit"
+            assert data["details"]["requiresProjectLookup"] == ["task1"]
+            assert data["details"]["estimatedRequests"] == 2
+            assert data["details"]["updates"][0]["startDate"] == (
+                "2026-07-15T06:45:00.000+0000"
+            )
+            mock_get.assert_not_called()
+        finally:
+            os.unlink(tmppath)
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_batch_edit_fails_closed_on_provider_errors(self, mock_get: MagicMock) -> None:
+        client = _mock_client()
+        mock_get.return_value = client
+        client.v2.batch_tasks.return_value = {
+            "id2etag": {},
+            "id2error": {"task1": "invalid task update"},
+        }
+        edits = [{"id": "task1", "projectId": "project1", "title": "Rejected"}]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(edits, f)
+            tmppath = f.name
+
+        try:
+            result = CliRunner().invoke(
+                task_group,
+                ["batch-edit", "--file", tmppath],
+                obj=_make_ctx(),
+            )
+            assert result.exit_code == 1
+            data = json.loads(result.output)
+            assert data["error_type"] == "APIError"
+            assert "task1" in data["error"]
+        finally:
+            os.unlink(tmppath)
+
+    @patch("ticktick_cli.commands.task_cmd.get_client")
+    def test_batch_edit_rejects_duplicate_ids_before_auth(self, mock_get: MagicMock) -> None:
+        edits = [
+            {"id": "task1", "title": "First"},
+            {"taskId": "task1", "title": "Second"},
+        ]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(edits, f)
+            tmppath = f.name
+
+        try:
+            result = CliRunner().invoke(
+                task_group,
+                ["batch-edit", "--file", tmppath],
+                obj=_make_ctx(),
+            )
+            assert result.exit_code == 1
+            assert "duplicate task id" in result.output
+            mock_get.assert_not_called()
+        finally:
+            os.unlink(tmppath)
+
+
+class TestTaskBatchAddInputAndErrors:
     @patch("ticktick_cli.commands.task_cmd.get_client")
     def test_batch_add_single_object(self, mock_get: MagicMock) -> None:
         """A single JSON object should be wrapped in a list."""
